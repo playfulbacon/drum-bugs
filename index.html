@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Drum Bugs</title>
+<meta name="description" content="A rhythm toy. Put bugs on the forest floor and stomp in time.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐞</text></svg>">
+</head>
+<body>
+
+<main id="stage">
+  <canvas id="field"></canvas>
+
+  <div id="banner"></div>
+  <div id="quality" class="quality"></div>
+
+  <div id="hud">
+    <div id="tray"></div>
+    <div class="spacer"></div>
+    <div id="beat"><span></span><span></span><span></span><span></span></div>
+    <div class="spacer"></div>
+    <div class="tools">
+      <span id="count" class="count"></span>
+      <button id="pulse" class="tool" title="Toggle the beat pulse">pulse</button>
+      <button id="clear" class="tool" title="Start a fresh patch">clear</button>
+      <span id="hudVersion" class="ver"></span>
+    </div>
+  </div>
+</main>
+
+<div id="title">
+  <div class="card">
+    <h1>Drum<span>Bugs</span></h1>
+    <p class="ver-line"><em id="version"></em> &middot; <span id="versionName"></span></p>
+
+    <p class="tag">Bugs walk the forest floor in silence.<br>What they walk <i>over</i> makes the sound.</p>
+
+    <ul class="how">
+      <li><b>Click an empty lane</b> to set a bug walking. It turns around at the edges.</li>
+      <li><b>Click a lane with a bug</b> to make it <b>stomp</b> — a loud hit on whatever it's standing on.</li>
+      <li><b>Stomp on the beat.</b> Off-beat still works, it's just a thud. Land it and you get a <i>crack</i>.</li>
+      <li><b>Seeds</b> lie around. Stomp one to crack it open where it is — or let the bug pick it up and carry it somewhere better.</li>
+      <li><b>Stomping while carrying</b> plants a flower. The ground decides what grows.</li>
+    </ul>
+
+    <p class="keys">Keys <kbd>1</kbd>–<kbd>5</kbd> stomp lanes top to bottom &middot; shift-click or right-click removes a bug</p>
+
+    <button id="start">Step outside</button>
+    <p class="foot">Headphones recommended.</p>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
