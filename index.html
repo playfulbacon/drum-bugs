@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Drum Bugs</title>
-<meta name="description" content="A rhythm toy. Put bugs on the forest floor and stomp in time.">
+<meta name="description" content="Teach bugs a rhythm. They loop it forever. The workforce is the song.">
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐞</text></svg>">
 </head>
@@ -12,21 +12,40 @@
 
 <main id="stage">
   <canvas id="field"></canvas>
-
   <div id="banner"></div>
-  <div id="quality" class="quality"></div>
 
   <div id="hud">
-    <div id="tray"></div>
-    <div class="spacer"></div>
-    <div id="beat"><span></span><span></span><span></span><span></span></div>
-    <div class="spacer"></div>
-    <div class="tools">
-      <span id="count" class="count"></span>
-      <button id="pulse" class="tool" title="Toggle the beat pulse">pulse</button>
-      <button id="clear" class="tool" title="Start a fresh patch">clear</button>
-      <span id="hudVersion" class="ver"></span>
+    <div id="playPanel" class="panel">
+      <div class="group" id="tray"></div>
+      <div class="group" id="mixer"></div>
+      <div class="group right">
+        <span id="score" class="score"></span>
+        <label class="tempo">tempo <input id="tempo" type="range" min="70" max="140" step="2" value="96"><b id="bpm">96</b></label>
+        <button id="pulse" class="tool">pulse</button>
+        <button id="reset" class="tool">reset</button>
+        <span id="hudVersion" class="ver"></span>
+      </div>
     </div>
+
+    <div id="teachPanel" class="panel" hidden>
+      <div class="group">
+        <b id="teachWho" class="who"></b>
+        <span id="teachState" class="badge"></span>
+      </div>
+      <div class="group verbs">
+        <button class="verb" data-verb="step">STEP<i>W / ↑</i></button>
+        <button class="verb" data-verb="left">LEFT<i>A / ←</i></button>
+        <button class="verb" data-verb="right">RIGHT<i>D / →</i></button>
+        <button class="verb" data-verb="act">ACT<i>space</i></button>
+      </div>
+      <div class="group right">
+        <span id="teachCloses" class="badge"></span>
+        <button id="teachDone" class="tool primary">done &crarr;</button>
+        <button id="teachCancel" class="tool">cancel</button>
+      </div>
+    </div>
+
+    <div id="pattern"></div>
   </div>
 </main>
 
@@ -35,20 +54,23 @@
     <h1>Drum<span>Bugs</span></h1>
     <p class="ver-line"><em id="version"></em> &middot; <span id="versionName"></span></p>
 
-    <p class="tag">Bugs walk the forest floor in silence.<br>What they walk <i>over</i> makes the sound.</p>
+    <p class="tag">Teach a bug a rhythm. It loops that rhythm forever.<br>
+      Its routine <i>is</i> its drum part — so building the workforce is writing the song.</p>
 
     <ul class="how">
-      <li><b>Click an empty lane</b> to set a bug walking. It turns around at the edges.</li>
-      <li><b>Click a lane with a bug</b> to make it <b>stomp</b> — a loud hit on whatever it's standing on.</li>
-      <li><b>Stomp on the beat.</b> Off-beat still works, it's just a thud. Land it and you get a <i>crack</i>.</li>
-      <li><b>Seeds</b> lie around. Stomp one to crack it open where it is — or let the bug pick it up and carry it somewhere better.</li>
-      <li><b>Stomping while carrying</b> plants a flower. The ground decides what grows.</li>
+      <li><b>Pick a bug and click the garden</b> to place it. You go straight into teaching.</li>
+      <li><b>Drum the routine</b> with <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd> <kbd>space</kbd> — step, turn left, turn right, act.
+        Not pressing anything leaves a <i>rest</i>. Watch the path preview build as you go.</li>
+      <li><b>Aim for a loop that closes</b> — one that comes back to where it started, facing the same way. The badge tells you.</li>
+      <li><b>Then conduct.</b> <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> cue sections in and out, <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> nudge them a beat late,
+        <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> accent their next action. On the beat it lands now; off the beat it waits for the bar.</li>
+      <li><b>Get every berry to the nest.</b> Ants carry. Beetles smash rock. Crickets jump water and kick berries.</li>
     </ul>
 
-    <p class="keys">Keys <kbd>1</kbd>–<kbd>5</kbd> stomp lanes top to bottom &middot; shift-click or right-click removes a bug</p>
+    <p class="keys">Click a bug to re-teach it &middot; shift-click to pick it up</p>
 
-    <button id="start">Step outside</button>
-    <p class="foot">Headphones recommended.</p>
+    <button id="start">Into the garden</button>
+    <p class="foot">Headphones recommended &middot; best on a desktop with a keyboard.</p>
   </div>
 </div>
 

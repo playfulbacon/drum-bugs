@@ -1,281 +1,322 @@
-// Field state, bug movement, and what happens when a stomp lands.
+// The garden, the bugs, and what one tick of the clock does to them.
+//
+// Time is measured in ticks (eighth notes). A bug acts every `period` ticks:
+// cricket 1, ant 2, beetle 4. Its routine is a fixed list of actions that it
+// walks through forever, one action per act.
 
-// Narrow screens get a shorter field so cells stay big enough to tap. Set once
-// at boot, before the state is built.
-export let COLS = 13;
-export const ROWS = 5;
+export const COLS = 15;
+export const ROWS = 7;
+export const TICKS_PER_BAR = 8;
+export const MAX_SLOTS = 16;
 
-export function setCols(n) {
-  COLS = n;
-}
-export const STEPS_PER_BAR = 4;
-export const BARS_PER_GUST = 8;
+export const ACTIONS = ['step', 'left', 'right', 'act', 'rest'];
 
-// Timing windows, in seconds either side of the beat.
-export const WINDOW_CRACK = 0.06;
-export const WINDOW_GOOD = 0.15;
-
-export const TERRAIN = {
-  bare:   { voice: null,     soft: 0,    label: 'bare earth' },
-  leaf:   { voice: 'leaf',   soft: 0.30, label: 'dry leaf' },
-  puddle: { voice: 'puddle', soft: 0.26, label: 'puddle' },
-  log:    { voice: 'log',    soft: 0.34, label: 'hollow log' },
-  stone:  { voice: 'stone',  soft: 0.26, label: 'stone' },
-  moss:   { voice: 'moss',   soft: 0.34, label: 'moss' },
-  soil:   { voice: 'soil',   soft: 0.24, label: 'soft soil' },
-};
-
-// What grows where. The ground decides — carry a seed to the water for
-// something splashy, to the wood for something hollow.
-export const FLOWER_BY_TERRAIN = {
-  puddle: 'dew',
-  log:    'pod',
-  leaf:   'pod',
-  stone:  'crystal',
-  moss:   'bloom',
-  soil:   'bloom',
-  bare:   'bloom',
-};
+// . grass   R rock (beetle smashes)   ~ water (cricket jumps)
+// N nest    b berry
+const LEVEL = [
+  '.....R.....~...',
+  '...b.R..b..~b..',
+  '..N..R.....~...',
+  '...b.R..b..~b..',
+  '.....R.....~...',
+  '.....R..b..~...',
+  '.....R.....~...',
+];
 
 export const BUGS = {
-  snail:   { period: 3, tone: 0.85, soft: 0.20, label: 'Snail',   hint: 'every 3 beats' },
-  beetle:  { period: 2, tone: 0.68, soft: 0.32, label: 'Beetle',  hint: 'every 2 beats' },
-  cricket: { period: 1, tone: 1.28, soft: 0.16, label: 'Cricket', hint: 'every beat' },
+  cricket: {
+    label: 'Cricket', period: 1, note: 'eighths', supply: 3,
+    carries: false, jumps: true, kicks: true, smashes: false,
+    blurb: 'jumps water, kicks berries',
+  },
+  ant: {
+    label: 'Ant', period: 2, note: 'quarters', supply: 4,
+    carries: true, jumps: false, kicks: false, smashes: false,
+    blurb: 'carries berries home',
+  },
+  beetle: {
+    label: 'Beetle', period: 4, note: 'halves', supply: 2,
+    carries: false, jumps: false, kicks: false, smashes: true,
+    blurb: 'smashes rock',
+  },
 };
 
-// C major pentatonic, bottom lane lowest.
-const LANE_SEMITONES = [21, 16, 12, 7, 0];
-const BASE_FREQ = 220;
+export const TYPES = ['cricket', 'ant', 'beetle'];
 
-export function laneFreq(row) {
-  const semi = LANE_SEMITONES[row] ?? 0;
-  return BASE_FREQ * Math.pow(2, semi / 12);
-}
-
-function rand(n) {
-  return Math.floor(Math.random() * n);
-}
+// East, South, West, North
+const DX = [1, 0, -1, 0];
+const DY = [0, 1, 0, -1];
 
 export function createState() {
-  const state = {
-    cells: [],
-    bugs: [],
-    step: 0,
-    particles: [],
-    flashes: [],
-    gustAt: -1,
-    hoverLane: null,
-    lastQuality: null,
-  };
-  for (let r = 0; r < ROWS; r++) {
+  const cells = [];
+  let nest = { x: 2, y: 2 };
+  for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      state.cells.push({ x, r, terrain: 'bare', seed: false, flower: null, hit: 0 });
+      const ch = LEVEL[y][x];
+      let t = 'grass';
+      let berry = false;
+      if (ch === 'R') t = 'rock';
+      else if (ch === '~') t = 'water';
+      else if (ch === 'N') { t = 'nest'; nest = { x, y }; }
+      else if (ch === 'b') berry = true;
+      cells.push({ x, y, t, berry });
     }
   }
-  generateField(state);
-  scatterSeeds(state, 11);
-  return state;
-}
 
-export function cellAt(state, x, r) {
-  if (x < 0 || x >= COLS || r < 0 || r >= ROWS) return null;
-  return state.cells[r * COLS + x];
-}
+  const supply = {};
+  for (const k of TYPES) supply[k] = BUGS[k].supply;
 
-// Clustered rather than uniform, so the field reads as a place.
-function generateField(state) {
-  const blob = (kind, count, maxRun) => {
-    for (let n = 0; n < count; n++) {
-      const r = rand(ROWS);
-      const x = rand(COLS);
-      const run = 1 + rand(maxRun);
-      for (let k = 0; k < run; k++) {
-        const c = cellAt(state, x + k, r);
-        if (c && c.terrain === 'bare') c.terrain = kind;
-      }
-    }
+  const sections = {};
+  for (const k of TYPES) sections[k] = { active: true, accent: false, flash: -10 };
+
+  return {
+    cells,
+    nest,
+    bugs: [],
+    supply,
+    sections,
+    tick: 0,
+    delivered: 0,
+    totalBerries: cells.filter((c) => c.berry).length,
+    particles: [],
+    hover: null,
+    won: false,
   };
-
-  blob('log', 3, 3);
-  blob('puddle', 3, 2);
-  blob('moss', 4, 2);
-  blob('leaf', 7, 2);
-  blob('soil', 4, 2);
-  for (let n = 0; n < 5; n++) {
-    const c = cellAt(state, rand(COLS), rand(ROWS));
-    if (c && c.terrain === 'bare') c.terrain = 'stone';
-  }
 }
 
-export function scatterSeeds(state, count) {
-  const open = state.cells.filter((c) => !c.seed && !c.flower);
-  for (let n = 0; n < count && open.length; n++) {
-    const i = rand(open.length);
-    open[i].seed = true;
-    open.splice(i, 1);
-  }
+export function cellAt(state, x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return null;
+  return state.cells[y * COLS + x];
 }
 
-export function bugInLane(state, r) {
-  return state.bugs.find((b) => b.r === r) || null;
+export function bugAt(state, x, y) {
+  return state.bugs.find((b) => b.x === x && b.y === y) || null;
 }
 
-export function placeBug(state, r, type) {
-  if (bugInLane(state, r)) return null;
-  const spec = BUGS[type];
+export function walkable(cell) {
+  return !!cell && (cell.t === 'grass' || cell.t === 'nest');
+}
+
+export function placeBug(state, x, y, type) {
+  const cell = cellAt(state, x, y);
+  if (!walkable(cell) || bugAt(state, x, y)) return null;
+  if (state.supply[type] <= 0) return null;
+  state.supply[type]--;
   const bug = {
-    r,
-    x: rand(COLS),
-    dir: Math.random() < 0.5 ? 1 : -1,
+    id: Math.random().toString(36).slice(2, 8),
     type,
-    period: spec.period,
-    phase: 0,
+    x, y,
+    dir: 0,
+    period: BUGS[type].period,
+    loop: ['rest'],
+    slot: 0,
+    ticksToNext: 1,
     carrying: false,
+    accented: false,
+    accentPending: false,
     // render state
-    visX: 0,
-    fromX: 0,
-    moveAt: -10,
-    stompAt: -10,
-    stompQuality: null,
+    visX: x, visY: y, fromX: x, fromY: y, moveAt: -10,
+    actAt: -10, actKind: null, visDir: 0,
   };
-  bug.visX = bug.x;
-  bug.fromX = bug.x;
   state.bugs.push(bug);
   return bug;
 }
 
-export function removeBug(state, r) {
-  const i = state.bugs.findIndex((b) => b.r === r);
-  if (i >= 0) return state.bugs.splice(i, 1)[0];
-  return null;
+export function removeBug(state, bug) {
+  const i = state.bugs.indexOf(bug);
+  if (i < 0) return;
+  state.bugs.splice(i, 1);
+  state.supply[bug.type]++;
+  if (bug.carrying) {
+    const c = cellAt(state, bug.x, bug.y);
+    if (c) c.berry = true;
+  }
 }
 
-export function qualityFromOffset(offset) {
-  const a = Math.abs(offset);
-  if (a < WINDOW_CRACK) return 'crack';
-  if (a < WINDOW_GOOD) return 'good';
-  return 'thud';
+// Align a bug so its next action lands on the given tick.
+export function alignTo(bug, fromTick, targetTick) {
+  bug.ticksToNext = Math.max(1, targetTick - fromTick);
 }
 
-const QUALITY_GAIN = { crack: 1.0, good: 0.78, thud: 0.48 };
+export function nextBarTick(tick) {
+  return (Math.floor(tick / TICKS_PER_BAR) + 1) * TICKS_PER_BAR;
+}
 
 // ---------------------------------------------------------------------------
-// The step. Bugs due this beat move one cell; blocked at the ends, they turn.
+// One tick of the world.
 
-export function advance(state, audio, tAudio, tVis, effects) {
-  state.step++;
-  const bar = Math.floor(state.step / STEPS_PER_BAR);
-  const onDownbeat = state.step % STEPS_PER_BAR === 0;
-
-  audio.pulse(tAudio, onDownbeat);
-
-  if (onDownbeat && bar > 0 && bar % BARS_PER_GUST === 0 && state.gustAt !== bar) {
-    state.gustAt = bar;
-    audio.wind(tAudio);
-    scatterSeeds(state, 3 + rand(3));
-    effects.gust();
-  }
+export function advance(state, audio, tAudio, tVis, fx) {
+  state.tick++;
+  const onBar = state.tick % TICKS_PER_BAR === 0;
+  audio.pulse(tAudio, onBar);
 
   for (const bug of state.bugs) {
-    let moved = false;
-    bug.phase++;
-    if (bug.phase >= bug.period) {
-      bug.phase = 0;
-      let nx = bug.x + bug.dir;
-      if (nx < 0 || nx >= COLS) {
-        bug.dir *= -1;
-        nx = bug.x + bug.dir;
-      }
-      bug.fromX = bug.x;
-      bug.x = nx;
-      bug.moveAt = tVis;
-      moved = true;
-    }
+    if (!state.sections[bug.type].active) continue;
+    bug.ticksToNext--;
+    if (bug.ticksToNext > 0) continue;
+    bug.ticksToNext = bug.period;
+    act(state, bug, audio, tAudio, tVis, fx);
+  }
 
-    const cell = cellAt(state, bug.x, bug.r);
-    const pending = bug.pendingStomp;
-    bug.pendingStomp = null;
-
-    // A stomp lands on any beat, whether or not the bug stepped — it just
-    // stomps where it stands.
-    if (pending) {
-      stompBug(state, audio, bug, tAudio, tVis, pending, effects);
-    } else if (moved) {
-      // Otherwise it brushes over the ground, and pockets any seed it finds.
-      touch(state, audio, bug, cell, tAudio, effects);
-      if (cell.seed && !bug.carrying) {
-        cell.seed = false;
-        bug.carrying = true;
-        effects.pickup(bug, cell);
-      }
-    }
+  if (!state.won && state.delivered >= state.totalBerries) {
+    state.won = true;
+    audio.chime(tAudio + 0.1);
+    fx.win();
   }
 }
 
-function touch(state, audio, bug, cell, tAudio, effects) {
-  const spec = BUGS[bug.type];
-  const t = TERRAIN[cell.terrain];
-  if (cell.flower) {
-    audio.flower(tAudio, laneFreq(bug.r), spec.soft * 0.9, cell.flower.kind);
-    effects.ripple(cell, 0.4, cell.flower.color);
-  }
-  if (t.voice) {
-    audio[t.voice](tAudio, spec.soft, spec.tone);
-    effects.ripple(cell, 0.3);
+function act(state, bug, audio, tAudio, tVis, fx) {
+  const action = bug.loop[bug.slot] || 'rest';
+  bug.slot = (bug.slot + 1) % bug.loop.length;
+
+  // An accent waits on the bug until its next action, so you conduct the
+  // section rather than having to hit each bug's own subdivision.
+  const accented = !!bug.accentPending;
+  bug.accentPending = false;
+  bug.accented = accented;
+  const i = accented ? 1.5 : 1;
+
+  bug.actAt = tVis;
+  bug.actKind = action;
+
+  switch (action) {
+    case 'rest':
+      break;
+
+    case 'left':
+    case 'right': {
+      bug.dir = (bug.dir + (action === 'left' ? 3 : 1)) % 4;
+      audio.scrape(tAudio, i * 0.9);
+      break;
+    }
+
+    case 'step': {
+      const nx = bug.x + DX[bug.dir];
+      const ny = bug.y + DY[bug.dir];
+      const target = cellAt(state, nx, ny);
+      if (walkable(target) && !bugAt(state, nx, ny)) {
+        moveTo(bug, nx, ny, tVis);
+        audio.foot(bug.type, tAudio, i);
+        fx.step(bug, accented);
+      } else {
+        audio.bump(tAudio);
+        fx.bump(bug);
+      }
+      break;
+    }
+
+    case 'act':
+      resolveAct(state, bug, audio, tAudio, tVis, fx, accented);
+      break;
   }
 }
 
-// The one verb. Always a loud hit; a carried seed just makes it leave
-// something behind.
-export function stompBug(state, audio, bug, tAudio, tVis, quality, effects) {
-  const cell = cellAt(state, bug.x, bug.r);
+function moveTo(bug, x, y, tVis) {
+  bug.fromX = bug.x;
+  bug.fromY = bug.y;
+  bug.x = x;
+  bug.y = y;
+  bug.moveAt = tVis;
+}
+
+// `act` is context-sensitive: it means whatever makes sense for what is in
+// front of the bug, or under it. That is what lets the routine be taught
+// without knowing exactly what it will meet.
+function resolveAct(state, bug, audio, tAudio, tVis, fx, accented) {
   const spec = BUGS[bug.type];
-  const gain = QUALITY_GAIN[quality];
-  const t = TERRAIN[cell.terrain];
+  const i = accented ? 1.5 : 1;
+  const here = cellAt(state, bug.x, bug.y);
+  const fx1 = bug.x + DX[bug.dir];
+  const fy1 = bug.y + DY[bug.dir];
+  const front = cellAt(state, fx1, fy1);
 
-  audio._thump(tAudio, gain * 0.9);
-  if (t.voice) audio[t.voice](tAudio, gain, spec.tone);
-  else audio.bare(tAudio, gain);
-
-  bug.stompAt = tVis;
-  bug.stompQuality = quality;
-  state.lastQuality = { quality, at: tVis, r: bug.r };
-  cell.hit++;
-
-  let planted = null;
-  if (bug.carrying) {
+  // 1. deliver
+  if (bug.carrying && here && here.t === 'nest') {
     bug.carrying = false;
-    planted = plant(state, cell, quality);
-  } else if (cell.seed) {
-    cell.seed = false;
-    planted = plant(state, cell, quality);
+    state.delivered++;
+    audio.boom(tAudio, i);
+    fx.deliver(bug);
+    return;
   }
 
-  if (planted) {
-    audio.flower(tAudio + 0.03, laneFreq(bug.r), gain, planted.kind);
-  } else if (cell.flower) {
-    audio.flower(tAudio, laneFreq(bug.r), gain * 0.9, cell.flower.kind);
+  // 2. smash rock (accented smashes the one behind it too)
+  if (spec.smashes && front && front.t === 'rock') {
+    front.t = 'grass';
+    if (accented) {
+      const beyond = cellAt(state, fx1 + DX[bug.dir], fy1 + DY[bug.dir]);
+      if (beyond && beyond.t === 'rock') { beyond.t = 'grass'; fx.smash(beyond); }
+    }
+    audio.crack(tAudio, i);
+    fx.smash(front);
+    return;
   }
 
-  effects.stomp(bug, cell, quality, planted);
+  // 3. jump water
+  if (spec.jumps && front && front.t === 'water') {
+    const land = cellAt(state, bug.x + DX[bug.dir] * 2, bug.y + DY[bug.dir] * 2);
+    if (walkable(land) && !bugAt(state, land.x, land.y)) {
+      moveTo(bug, land.x, land.y, tVis);
+      audio.whoosh(tAudio, i);
+      fx.jump(bug);
+      return;
+    }
+  }
+
+  // 4. kick a berry two cells further on (three when accented). It is airborne,
+  //    so what it passes over does not matter — only where it lands.
+  if (spec.kicks && front && front.berry) {
+    const dist = accented ? 3 : 2;
+    const land = cellAt(state, fx1 + DX[bug.dir] * dist, fy1 + DY[bug.dir] * dist);
+    if (walkable(land) && !land.berry) {
+      front.berry = false;
+      land.berry = true;
+      audio.pop(tAudio, i);
+      fx.kick(front, land);
+      return;
+    }
+  }
+
+  // 5. pick up what you are standing on
+  if (spec.carries && !bug.carrying && here && here.berry) {
+    here.berry = false;
+    bug.carrying = true;
+    audio.pluck(tAudio, i);
+    fx.pickup(bug);
+    return;
+  }
+
+  audio.whiff(tAudio);
+  fx.whiff(bug);
 }
 
-const FLOWER_COLORS = {
-  bloom:   '#e8a0b8',
-  dew:     '#9fd8e6',
-  pod:     '#d9b473',
-  crystal: '#c9bbe8',
-};
+// ---------------------------------------------------------------------------
+// Preview: walk a routine through the terrain without touching anything, so
+// the player can see the shape of the path while composing it.
 
-function plant(state, cell, quality) {
-  const kind = FLOWER_BY_TERRAIN[cell.terrain] || 'bloom';
-  const size = quality === 'crack' ? 1 : quality === 'good' ? 0.78 : 0.55;
-  cell.flower = {
-    kind,
-    size,
-    color: FLOWER_COLORS[kind],
-    bornAt: state.step,
-    sway: Math.random() * Math.PI * 2,
-  };
-  return cell.flower;
+export function previewPath(state, bug, loop) {
+  const spec = BUGS[bug.type];
+  let x = bug.x;
+  let y = bug.y;
+  let dir = bug.dir;
+  const path = [{ x, y, dir, slot: -1 }];
+
+  for (let s = 0; s < loop.length; s++) {
+    const a = loop[s];
+    if (a === 'left') dir = (dir + 3) % 4;
+    else if (a === 'right') dir = (dir + 1) % 4;
+    else if (a === 'step') {
+      const nx = x + DX[dir];
+      const ny = y + DY[dir];
+      if (walkable(cellAt(state, nx, ny))) { x = nx; y = ny; }
+    } else if (a === 'act' && spec.jumps) {
+      // jumping is the only act that moves, and terrain makes it predictable
+      const front = cellAt(state, x + DX[dir], y + DY[dir]);
+      const land = cellAt(state, x + DX[dir] * 2, y + DY[dir] * 2);
+      if (front && front.t === 'water' && walkable(land)) { x = land.x; y = land.y; }
+    }
+    path.push({ x, y, dir, slot: s });
+  }
+
+  const closes = x === bug.x && y === bug.y && dir === bug.dir;
+  return { path, closes };
 }

@@ -1,7 +1,5 @@
-// Forest-floor foley, synthesised. No samples — everything here is noise,
-// filters and envelopes, shaped to sound like leaves, water, wood and stone.
-
-const NOISE_SECONDS = 2;
+// Synthesised garden foley. No samples — noise, oscillators, filters, envelopes.
+// Each bug type has its own footfall timbre; that footfall IS its instrument.
 
 export class AudioEngine {
   constructor() {
@@ -28,27 +26,24 @@ export class AudioEngine {
     comp.ratio.value = 3.5;
     comp.attack.value = 0.004;
     comp.release.value = 0.25;
-
     this.out.connect(comp);
     comp.connect(c.destination);
 
-    // Small damp room. Keeps everything sounding close and earthy.
     this.verb = c.createConvolver();
-    this.verb.buffer = this._impulse(1.5, 2.8);
+    this.verb.buffer = this._impulse(1.4, 2.8);
     const verbOut = c.createGain();
-    verbOut.gain.value = 0.55;
+    verbOut.gain.value = 0.5;
     this.verb.connect(verbOut);
     verbOut.connect(this.out);
 
     this.send = c.createGain();
-    this.send.gain.value = 1;
     const damp = c.createBiquadFilter();
     damp.type = 'lowpass';
-    damp.frequency.value = 3000;
+    damp.frequency.value = 3200;
     this.send.connect(damp);
     damp.connect(this.verb);
 
-    this.noiseBuf = this._noise(NOISE_SECONDS);
+    this.noiseBuf = this._noise(2);
     this.ready = true;
   }
 
@@ -89,7 +84,7 @@ export class AudioEngine {
     return s;
   }
 
-  _route(node, wet = 0.22) {
+  _route(node, wet = 0.2) {
     node.connect(this.out);
     const s = this.ctx.createGain();
     s.gain.value = wet;
@@ -105,224 +100,108 @@ export class AudioEngine {
     return g;
   }
 
-  // A low body thump under every stomp, so hits have weight.
-  _thump(t, i) {
+  _noiseHit(t, { peak, f0, f1, q, dur, type = 'bandpass', wet = 0.2 }) {
+    const c = this.ctx;
+    const src = this._src();
+    const f = c.createBiquadFilter();
+    f.type = type;
+    if (q != null) f.Q.value = q;
+    f.frequency.setValueAtTime(f0, t);
+    if (f1 != null && f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.8);
+    const g = this._env(t, peak, 0.003, dur);
+    src.connect(f);
+    f.connect(g);
+    this._route(g, wet);
+    src.start(t);
+    src.stop(t + dur + 0.2);
+  }
+
+  _tone(t, { type = 'sine', f0, f1, peak, dur, wet = 0.2 }) {
     const c = this.ctx;
     const o = c.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(120, t);
-    o.frequency.exponentialRampToValueAtTime(42, t + 0.09);
-    const g = this._env(t, 0.42 * i, 0.006, 0.14);
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 != null && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.6);
+    const g = this._env(t, peak, 0.005, dur);
     o.connect(g);
-    this._route(g, 0.12);
+    this._route(g, wet);
     o.start(t);
-    o.stop(t + 0.3);
+    o.stop(t + dur + 0.2);
   }
 
-  // ---- ground voices ------------------------------------------------------
-  // Every voice takes (t, intensity 0..1, tone) where tone comes from the bug:
-  // heavier bugs push it down and darker, lighter bugs up and brighter.
+  // ---- footfalls: one per bug type ---------------------------------------
+  // i is intensity — accents come through as a louder, brighter version.
 
-  leaf(t, i, tone = 1) {
-    const c = this.ctx;
-    const src = this._src();
-    const hp = c.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 800;
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.Q.value = 1.0;
-    bp.frequency.setValueAtTime(3600 * tone, t);
-    bp.frequency.exponentialRampToValueAtTime(1400 * tone, t + 0.09);
-    const g = this._env(t, 0.5 * i, 0.004, 0.05 + 0.16 * i);
-    src.connect(hp);
-    hp.connect(bp);
-    bp.connect(g);
-    this._route(g, 0.2);
-    src.start(t);
-    src.stop(t + 0.5);
+  footCricket(t, i = 1) {
+    this._noiseHit(t, { peak: 0.3 * i, f0: 4200, f1: 2600, q: 3.2, dur: 0.035, wet: 0.24 });
+    this._tone(t, { type: 'triangle', f0: 1900, f1: 1300, peak: 0.1 * i, dur: 0.03, wet: 0.2 });
   }
 
-  puddle(t, i, tone = 1) {
-    const c = this.ctx;
-    const src = this._src();
-    const hp = c.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 1100;
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.Q.value = 0.7;
-    bp.frequency.setValueAtTime(900 * tone, t);
-    bp.frequency.exponentialRampToValueAtTime(6500 * tone, t + 0.12);
-    const g = this._env(t, 0.34 * i, 0.006, 0.3 + 0.7 * i);
-    src.connect(hp);
-    hp.connect(bp);
-    bp.connect(g);
-    this._route(g, 0.42);
-    src.start(t);
-    src.stop(t + 1.6);
-
-    // the plop under the splash
-    const o = c.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(420, t);
-    o.frequency.exponentialRampToValueAtTime(180, t + 0.06);
-    const og = this._env(t, 0.16 * i, 0.004, 0.07);
-    o.connect(og);
-    this._route(og, 0.2);
-    o.start(t);
-    o.stop(t + 0.2);
+  footAnt(t, i = 1) {
+    this._tone(t, { type: 'triangle', f0: 330, f1: 190, peak: 0.34 * i, dur: 0.1, wet: 0.18 });
+    this._noiseHit(t, { peak: 0.16 * i, f0: 1800, f1: 900, q: 1.4, dur: 0.03, wet: 0.16 });
   }
 
-  log(t, i, tone = 1) {
-    const c = this.ctx;
-    const o = c.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(105 * tone, t);
-    o.frequency.exponentialRampToValueAtTime(46 * tone, t + 0.1);
-    const g = this._env(t, 0.62 * i, 0.005, 0.18 + 0.34 * i);
-    o.connect(g);
-    this._route(g, 0.18);
-    o.start(t);
-    o.stop(t + 0.8);
-
-    // knuckle on wood
-    const src = this._src();
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 1600 * tone;
-    const ng = this._env(t, 0.22 * i, 0.002, 0.035);
-    src.connect(lp);
-    lp.connect(ng);
-    this._route(ng, 0.14);
-    src.start(t);
-    src.stop(t + 0.15);
+  footBeetle(t, i = 1) {
+    this._tone(t, { f0: 110, f1: 48, peak: 0.5 * i, dur: 0.22, wet: 0.14 });
+    this._noiseHit(t, { peak: 0.2 * i, f0: 900, f1: 320, q: 1, dur: 0.05, type: 'lowpass', wet: 0.14 });
   }
 
-  stone(t, i, tone = 1) {
-    const c = this.ctx;
-    const src = this._src();
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 2100 * tone;
-    bp.Q.value = 2.4;
-    const g = this._env(t, 0.4 * i, 0.002, 0.035 + 0.04 * i);
-    src.connect(bp);
-    bp.connect(g);
-    this._route(g, 0.26);
-    src.start(t);
-    src.stop(t + 0.2);
-
-    const o = c.createOscillator();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(720 * tone, t);
-    o.frequency.exponentialRampToValueAtTime(430 * tone, t + 0.04);
-    const og = this._env(t, 0.2 * i, 0.002, 0.05);
-    o.connect(og);
-    this._route(og, 0.2);
-    o.start(t);
-    o.stop(t + 0.2);
+  foot(type, t, i = 1) {
+    if (type === 'cricket') this.footCricket(t, i);
+    else if (type === 'beetle') this.footBeetle(t, i);
+    else this.footAnt(t, i);
   }
 
-  moss(t, i, tone = 1) {
-    const c = this.ctx;
-    const src = this._src();
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 780 * tone;
-    const g = this._env(t, 0.26 * i, 0.01, 0.1 + 0.1 * i);
-    src.connect(lp);
-    lp.connect(g);
-    this._route(g, 0.24);
-    src.start(t);
-    src.stop(t + 0.4);
+  // ---- action voices ------------------------------------------------------
+
+  scrape(t, i = 1) {
+    this._noiseHit(t, { peak: 0.12 * i, f0: 1500, f1: 3400, q: 1.6, dur: 0.09, wet: 0.24 });
   }
 
-  soil(t, i, tone = 1) {
-    const c = this.ctx;
-    const src = this._src();
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 460 * tone;
-    const g = this._env(t, 0.34 * i, 0.004, 0.07 + 0.08 * i);
-    src.connect(lp);
-    lp.connect(g);
-    this._route(g, 0.16);
-    src.start(t);
-    src.stop(t + 0.3);
+  pluck(t, i = 1) {
+    this._tone(t, { f0: 660, peak: 0.24 * i, dur: 0.4, wet: 0.4 });
+    this._tone(t, { type: 'triangle', f0: 990, peak: 0.09 * i, dur: 0.22, wet: 0.4 });
   }
 
-  // Bare dirt — what a stomp on nothing sounds like.
-  bare(t, i) {
-    this.soil(t, i * 0.55, 0.9);
+  crack(t, i = 1) {
+    this._noiseHit(t, { peak: 0.5 * i, f0: 2600, f1: 700, q: 0.8, dur: 0.16, wet: 0.34 });
+    this._tone(t, { f0: 160, f1: 52, peak: 0.5 * i, dur: 0.24, wet: 0.16 });
   }
 
-  // ---- flowers ------------------------------------------------------------
-  // The one pitched layer. Drums are given; melody is planted.
-
-  flower(t, freq, i, kind) {
-    const c = this.ctx;
-    const mk = (type, f, gain, rel, wet) => {
-      const o = c.createOscillator();
-      o.type = type;
-      o.frequency.value = f;
-      const g = this._env(t, gain * i, 0.012, rel);
-      o.connect(g);
-      this._route(g, wet);
-      o.start(t);
-      o.stop(t + rel + 0.2);
-    };
-
-    if (kind === 'dew') {
-      mk('triangle', freq * 2, 0.2, 1.5, 0.5);
-      mk('sine', freq * 3.01, 0.09, 1.1, 0.5);
-      const src = this._src();
-      const hp = c.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = 5200;
-      const g = this._env(t, 0.1 * i, 0.02, 0.7);
-      src.connect(hp);
-      hp.connect(g);
-      this._route(g, 0.5);
-      src.start(t);
-      src.stop(t + 1);
-    } else if (kind === 'pod') {
-      mk('triangle', freq * 0.5, 0.34, 0.42, 0.24);
-      mk('sine', freq, 0.12, 0.3, 0.24);
-    } else if (kind === 'crystal') {
-      mk('sine', freq * 3, 0.16, 0.9, 0.45);
-      mk('sine', freq * 4.2, 0.07, 0.7, 0.45);
-    } else {
-      // bloom — warm and round
-      mk('sine', freq, 0.26, 1.3, 0.35);
-      mk('sine', freq * 2, 0.09, 0.8, 0.35);
-      mk('triangle', freq * 0.5, 0.07, 1.0, 0.3);
-    }
+  whoosh(t, i = 1) {
+    this._noiseHit(t, { peak: 0.2 * i, f0: 700, f1: 4200, q: 0.9, dur: 0.22, wet: 0.4 });
   }
 
-  // ---- world --------------------------------------------------------------
+  pop(t, i = 1) {
+    this._tone(t, { f0: 900, f1: 340, peak: 0.3 * i, dur: 0.07, wet: 0.3 });
+    this._noiseHit(t, { peak: 0.14 * i, f0: 3000, f1: 1400, q: 2.4, dur: 0.03, wet: 0.3 });
+  }
 
-  wind(t) {
-    const c = this.ctx;
-    const src = this._src();
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(320, t);
-    lp.frequency.linearRampToValueAtTime(1500, t + 1.1);
-    lp.frequency.linearRampToValueAtTime(300, t + 2.6);
-    const hp = c.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 200;
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.16, t + 0.9);
-    g.gain.linearRampToValueAtTime(0.0001, t + 2.7);
-    src.connect(hp);
-    hp.connect(lp);
-    lp.connect(g);
-    this._route(g, 0.5);
-    src.start(t);
-    src.stop(t + 3);
+  // Deliveries to the nest are the bass drum — tight logistics land on the one.
+  boom(t, i = 1) {
+    this._tone(t, { f0: 150, f1: 40, peak: 0.85 * i, dur: 0.34, wet: 0.12 });
+    this._noiseHit(t, { peak: 0.2 * i, f0: 400, f1: 120, dur: 0.05, type: 'lowpass', wet: 0.12 });
+  }
+
+  whiff(t) {
+    this._noiseHit(t, { peak: 0.05, f0: 2200, f1: 1600, q: 4, dur: 0.02, wet: 0.1 });
+  }
+
+  bump(t) {
+    this._tone(t, { f0: 190, f1: 120, peak: 0.16, dur: 0.06, wet: 0.14 });
+  }
+
+  place(t) {
+    this._noiseHit(t, { peak: 0.22, f0: 520, f1: 220, dur: 0.09, type: 'lowpass', wet: 0.2 });
+  }
+
+  chime(t) {
+    [0, 4, 7, 12].forEach((semi, k) => {
+      this._tone(t + k * 0.09, {
+        f0: 523.25 * Math.pow(2, semi / 12), peak: 0.2, dur: 0.9, wet: 0.5,
+      });
+    });
   }
 
   pulse(t, accent) {
@@ -330,16 +209,24 @@ export class AudioEngine {
     const c = this.ctx;
     const o = c.createOscillator();
     o.type = 'sine';
-    o.frequency.value = accent ? 1500 : 1100;
-    const g = this._env(t, accent ? 0.05 : 0.028, 0.001, 0.022);
+    o.frequency.value = accent ? 1600 : 1150;
+    const g = this._env(t, accent ? 0.05 : 0.024, 0.001, 0.02);
     o.connect(g);
     g.connect(this.out);
     o.start(t);
     o.stop(t + 0.1);
   }
 
-  // Placing a bug — a small soft landing.
-  drop(t) {
-    this.soil(t, 0.5, 1.1);
+  // Count-in before recording a routine.
+  countIn(t, last) {
+    const c = this.ctx;
+    const o = c.createOscillator();
+    o.type = 'square';
+    o.frequency.value = last ? 1320 : 880;
+    const g = this._env(t, 0.07, 0.002, 0.05);
+    o.connect(g);
+    g.connect(this.out);
+    o.start(t);
+    o.stop(t + 0.15);
   }
 }
