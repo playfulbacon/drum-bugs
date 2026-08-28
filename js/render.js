@@ -1,6 +1,6 @@
 // Top-down garden. Muted greens and browns, soft shapes, everything a bit damp.
 
-import { COLS, ROWS, cellAt } from './game.js';
+import { COLS, ROWS, SPAWN_RADIUS } from './game.js';
 
 export const layout = { u: 0, ox: 0, oy: 0, w: 0, h: 0 };
 
@@ -92,6 +92,7 @@ export function draw(g, state, view, time, teach) {
   const u = layout.u;
   for (const cell of state.cells) drawGround(g, cell, u, time);
   if (mottle) g.drawImage(mottle, layout.ox, layout.oy, layout.w, layout.h);
+  drawSpawn(g, state, u, time, !!state.placing);
   for (const cell of state.cells) drawFeature(g, cell, u);
 
   // hovered cell
@@ -111,6 +112,32 @@ export function draw(g, state, view, time, teach) {
 }
 
 // ---------------------------------------------------------------------------
+
+// The clearing bugs are dropped into. Lit up while you are holding one.
+function drawSpawn(g, state, u, time, lit) {
+  const x0 = Math.max(0, state.nest.x - SPAWN_RADIUS);
+  const y0 = Math.max(0, state.nest.y - SPAWN_RADIUS);
+  const x1 = Math.min(COLS - 1, state.nest.x + SPAWN_RADIUS);
+  const y1 = Math.min(ROWS - 1, state.nest.y + SPAWN_RADIUS);
+  const a = cellCenter(x0, y0);
+  const b = cellCenter(x1, y1);
+  const rx = a.cx - u / 2;
+  const ry = a.cy - u / 2;
+  const rw = b.cx - a.cx + u;
+  const rh = b.cy - a.cy + u;
+
+  const pulse = lit ? 0.5 + 0.5 * Math.sin(time * 4) : 0;
+  g.save();
+  g.fillStyle = `rgba(214,232,166,${(0.035 + pulse * 0.05).toFixed(3)})`;
+  g.fillRect(rx, ry, rw, rh);
+  g.strokeStyle = `rgba(214,232,166,${(0.22 + pulse * 0.4).toFixed(3)})`;
+  g.lineWidth = Math.max(1.5, u * 0.035);
+  g.setLineDash([u * 0.2, u * 0.16]);
+  g.lineDashOffset = -time * 14;
+  g.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
+  g.setLineDash([]);
+  g.restore();
+}
 
 function drawGround(g, cell, u, time) {
   const { cx, cy } = cellCenter(cell.x, cell.y);

@@ -15,33 +15,41 @@
   <div id="banner"></div>
 
   <div id="hud">
-    <div id="playPanel" class="panel">
-      <div class="group" id="tray"></div>
-      <div class="group" id="mixer"></div>
-      <div class="group right">
-        <span id="score" class="score"></span>
-        <label class="tempo">tempo <input id="tempo" type="range" min="70" max="140" step="2" value="96"><b id="bpm">96</b></label>
-        <button id="pulse" class="tool">pulse</button>
-        <button id="reset" class="tool">reset</button>
-        <span id="hudVersion" class="ver"></span>
-      </div>
-    </div>
+    <div id="hudTop">
+      <div id="beat"><span class="ring"></span><b id="beatNum">1</b></div>
 
-    <div id="teachPanel" class="panel" hidden>
-      <div class="group">
-        <b id="teachWho" class="who"></b>
-        <span id="teachState" class="badge"></span>
-      </div>
-      <div class="group verbs">
-        <button class="verb" data-verb="step">STEP<i>W / ↑</i></button>
-        <button class="verb" data-verb="left">LEFT<i>A / ←</i></button>
-        <button class="verb" data-verb="right">RIGHT<i>D / →</i></button>
-        <button class="verb" data-verb="act">ACT<i>space</i></button>
-      </div>
-      <div class="group right">
-        <span id="teachCloses" class="badge"></span>
-        <button id="teachDone" class="tool primary">done &crarr;</button>
-        <button id="teachCancel" class="tool">cancel</button>
+      <div id="panels">
+        <div id="playPanel" class="panel">
+          <div class="group" id="tray"></div>
+          <div class="group" id="mixer"></div>
+          <div class="group right">
+            <span id="score" class="score"></span>
+            <label class="tempo">tempo <input id="tempo" type="range" min="70" max="140" step="2" value="96"><b id="bpm">96</b></label>
+            <button id="pulse" class="tool">pulse</button>
+            <button id="reset" class="tool">reset</button>
+            <span id="hudVersion" class="ver"></span>
+          </div>
+        </div>
+
+        <div id="teachPanel" class="panel" hidden>
+          <div class="group">
+            <b id="teachWho" class="who"></b>
+          </div>
+          <div class="group bars" id="bars"></div>
+          <div class="group verbs">
+            <button class="verb" data-verb="west">←<i>A</i></button>
+            <button class="verb" data-verb="north">↑<i>W</i></button>
+            <button class="verb" data-verb="south">↓<i>S</i></button>
+            <button class="verb" data-verb="east">→<i>D</i></button>
+            <button class="verb wide" data-verb="act">ACT<i>space</i></button>
+          </div>
+          <div class="group right">
+            <span id="teachCloses" class="badge"></span>
+            <button id="teachClear" class="tool">clear</button>
+            <button id="teachDone" class="tool primary">confirm &crarr;</button>
+            <button id="teachCancel" class="tool">cancel esc</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -58,13 +66,14 @@
       Its routine <i>is</i> its drum part — so building the workforce is writing the song.</p>
 
     <ul class="how">
-      <li><b>Pick a bug and click the garden</b> to place it. You go straight into teaching.</li>
-      <li><b>Drum the routine</b> with <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd> <kbd>space</kbd> — step, turn left, turn right, act.
-        Not pressing anything leaves a <i>rest</i>. Watch the path preview build as you go.</li>
-      <li><b>Aim for a loop that closes</b> — one that comes back to where it started, facing the same way. The badge tells you.</li>
+      <li><b>Bugs come out of the nest.</b> Pick one and drop it in the lit clearing. You go straight into teaching.</li>
+      <li><b>Drum the routine</b> with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> — north, west, south, east — and <kbd>space</kbd> to act.
+        The routine <i>loops while you build it</i>, so keep going round until it's right. Nothing commits until you confirm.</li>
+      <li><b>Aim by walking into things.</b> A move always turns the bug, even when the way is blocked — so nose into a rock, then act.</li>
+      <li><b>Aim for a loop that closes</b> — one that comes back to where it started. A routine that drifts is a bug that travels; re-teach it when it arrives.</li>
       <li><b>Then conduct.</b> <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> cue sections in and out, <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> nudge them a beat late,
         <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> accent their next action. On the beat it lands now; off the beat it waits for the bar.</li>
-      <li><b>Get every berry to the nest.</b> Ants carry. Beetles smash rock. Crickets jump water and kick berries.</li>
+      <li><b>Get every berry to the nest.</b> Ants carry. Beetles smash rock. Crickets jump water, and kick the berry they're standing on.</li>
     </ul>
 
     <p class="keys">Click a bug to re-teach it &middot; shift-click to pick it up</p>

@@ -2,14 +2,15 @@ import { VERSION, VERSION_NAME } from './version.js';
 import { AudioEngine } from './audio.js';
 import {
   createState, advance, previewPath, placeBug, removeBug, bugAt, cellAt,
-  walkable, nextBarTick, alignTo, BUGS, TYPES, MAX_SLOTS, TICKS_PER_BAR,
+  walkable, inSpawn, nextBarTick, alignTo, slotsForBars,
+  BUGS, TYPES, DIR_OF, BAR_CHOICES, TICKS_PER_BAR,
 } from './game.js';
 import { computeLayout, cellFromPoint, cellCenter, draw, layout } from './render.js';
 
-// Time is in ticks — eighth notes. Cricket acts every tick, ant every 2,
-// beetle every 4.
 const IMMEDIATE_WINDOW = 0.07;
 const GLIDE = 0.13;
+
+const QUALITY_RGB = { now: '255,236,182', bar: '198,222,178' };
 
 const SILENT = new Proxy({ pulseOn: false, now: 0 }, {
   get: (t, k) => (k in t ? t[k] : () => {}),
@@ -34,6 +35,7 @@ const app = {
 const visNow = () => performance.now() / 1000;
 const beatNow = () => (app.live ? app.audio.now : visNow());
 const setBpm = (bpm) => { app.bpm = bpm; app.tickDur = 60 / bpm / 2; };
+const isMove = (a) => DIR_OF[a] != null;
 
 // ---------------------------------------------------------------------------
 // effects
@@ -64,7 +66,7 @@ const fx = {
   step(bug, accented) {
     if (!accented) return;
     const { cx, cy } = cellCenter(bug.x, bug.y);
-    ring(cx, cy, layout.u * 0.2, '255,236,182');
+    ring(cx, cy, layout.u * 0.2, QUALITY_RGB.now);
   },
   bump(bug) {
     const { cx, cy } = cellCenter(bug.x, bug.y);
@@ -108,27 +110,41 @@ const fx = {
 };
 
 // ---------------------------------------------------------------------------
-// teaching
+// teaching — a looping recorder. The routine plays round and round while you
+// build it, the bug walking it in ghost, and nothing commits until you confirm.
 
 function startTeach(bug) {
   app.mode = 'teach';
-  app.teach = {
+  const t = {
     bug,
-    slots: [],
-    previousLoop: bug.loop,
+    bars: bug.bars,
+    slots: bug.loop.slice(),
+    prevLoop: bug.loop,
+    prevBars: bug.bars,
+    prevDir: bug.dir,
+    head: -1,
     pending: null,
-    pendingNext: null,
-    countIn: 2,
+    countIn: Math.max(2, slotsForBars(1, bug.period)),
     recording: false,
     ticksToSlot: bug.period,
-    preview: previewPath(app.state, bug, []),
+    fromG: { x: bug.x, y: bug.y },
+    toG: { x: bug.x, y: bug.y },
+    gAt: -10,
+    preview: null,
   };
+  app.teach = t;
+  recompute(t);
   document.getElementById('playPanel').hidden = true;
   document.getElementById('teachPanel').hidden = false;
+  buildBars();
   refreshTeachUI();
 }
 
-function teachTick(tAudio) {
+function recompute(t) {
+  t.preview = previewPath(app.state, t.bug, t.slots);
+}
+
+function teachTick(tAudio, tVis) {
   const t = app.teach;
   t.ticksToSlot--;
   if (t.ticksToSlot > 0) return;
@@ -137,59 +153,104 @@ function teachTick(tAudio) {
   if (t.countIn > 0) {
     t.countIn--;
     app.audio.countIn(tAudio, t.countIn === 0);
-    if (t.countIn === 0) t.recording = true;
+    if (t.countIn === 0) { t.recording = true; t.head = -1; }
     refreshTeachUI();
     return;
   }
 
-  t.slots.push(t.pending || 'rest');
-  t.pending = t.pendingNext;
-  t.pendingNext = null;
-  t.preview = previewPath(app.state, t.bug, t.slots);
-  refreshTeachUI();
+  const wrapped = t.head + 1 >= t.slots.length;
+  t.head = wrapped ? 0 : t.head + 1;
 
-  if (t.slots.length >= MAX_SLOTS) finishTeach();
+  if (t.pending) {
+    t.slots[t.head] = t.pending;
+    t.pending = null;
+    recompute(t);
+  }
+
+  // ghost walks the previewed path; on the wrap it snaps back to the start,
+  // which is what makes a drifting routine obvious
+  const from = wrapped ? t.preview.path[0] : (t.preview.path[t.head] || t.preview.path[0]);
+  const to = t.preview.path[t.head + 1] || t.preview.path[0];
+  t.fromG = { x: from.x, y: from.y };
+  t.toG = { x: to.x, y: to.y };
+  t.gAt = tVis;
+  t.bug.dir = to.dir;
+
+  const a = t.slots[t.head];
+  if (a === 'act') app.audio.pluck(tAudio, 0.5);
+  else if (isMove(a)) app.audio.foot(t.bug.type, tAudio, 0.85);
+
+  refreshTeachUI();
 }
 
-// A press lands in the slot it is nearest to, so being slightly early still
-// records where you meant it.
+// A tap goes to whichever slot boundary it is nearest.
 function pressVerb(v) {
   const t = app.teach;
   if (!t) return;
   litVerb(v);
-  previewVerbSound(v);
+  if (v === 'act') app.audio.pluck(beatNow(), 0.6);
+  else app.audio.foot(t.bug.type, beatNow(), 0.8);
   if (!t.recording) return;
+
   const slotDur = t.bug.period * app.tickDur;
-  const boundary = app.nextTick + (t.ticksToSlot - 1) * app.tickDur;
-  if (boundary - beatNow() < slotDur * 0.45) t.pendingNext = v;
-  else t.pending = v;
+  const toNext = app.nextTick + (t.ticksToSlot - 1) * app.tickDur - beatNow();
+  if (toNext <= slotDur / 2) {
+    t.pending = v;
+  } else if (t.head >= 0) {
+    t.slots[t.head] = v;
+    recompute(t);
+  }
   refreshTeachUI();
 }
 
-function previewVerbSound(v) {
-  const a = app.audio;
-  const t = beatNow();
-  if (v === 'step') a.foot(app.teach.bug.type, t, 0.8);
-  else if (v === 'act') a.pluck(t, 0.6);
-  else a.scrape(t, 0.8);
+function setBars(n) {
+  const t = app.teach;
+  const len = slotsForBars(n, t.bug.period);
+  const old = t.slots;
+  t.slots = new Array(len).fill('rest');
+  for (let i = 0; i < Math.min(len, old.length); i++) t.slots[i] = old[i];
+  t.bars = n;
+  t.head = -1;
+  t.pending = null;
+  recompute(t);
+  buildBars();
+  refreshTeachUI();
+}
+
+function clearRoutine() {
+  const t = app.teach;
+  t.slots = new Array(t.slots.length).fill('rest');
+  t.pending = null;
+  recompute(t);
+  refreshTeachUI();
 }
 
 function finishTeach() {
   const t = app.teach;
-  const loop = t.slots.length ? t.slots : ['rest'];
-  t.bug.loop = loop;
-  t.bug.slot = 0;
-  alignTo(t.bug, app.state.tick, nextBarTick(app.state.tick));
+  const bug = t.bug;
+  bug.loop = t.slots.slice();
+  bug.bars = t.bars;
+  bug.dir = t.preview.startDir;
+  bug.slot = 0;
+  alignTo(bug, app.state.tick, nextBarTick(app.state.tick));
+  const closes = t.preview.closes;
   endTeach();
-  flashBanner(t.preview.closes ? 'routine set — it closes' : 'routine set — it drifts');
+  flashBanner(closes ? 'routine set — it closes' : 'routine set — it travels');
 }
 
 function cancelTeach() {
-  app.teach.bug.loop = app.teach.previousLoop;
+  const t = app.teach;
+  t.bug.loop = t.prevLoop;
+  t.bug.bars = t.prevBars;
+  t.bug.dir = t.prevDir;
   endTeach();
 }
 
 function endTeach() {
+  const bug = app.teach.bug;
+  bug.fromX = bug.x; bug.fromY = bug.y;
+  bug.visX = bug.x; bug.visY = bug.y;
+  bug.moveAt = -10;
   app.mode = 'play';
   app.teach = null;
   document.getElementById('playPanel').hidden = false;
@@ -206,7 +267,6 @@ function timeToNearestTick() {
   return toNext <= sincePrev ? toNext : -sincePrev;
 }
 
-// Loose input lands on the next bar line; dead on the beat it lands now.
 function conduct(fn, label) {
   if (Math.abs(timeToNearestTick()) < IMMEDIATE_WINDOW) {
     fn();
@@ -248,8 +308,7 @@ function accentSection(type) {
 function onPointerDown(e) {
   const rect = app.canvas.getBoundingClientRect();
   const hit = cellFromPoint(e.clientX - rect.left, e.clientY - rect.top);
-  if (!hit) return;
-  if (app.mode === 'teach') return;
+  if (!hit || app.mode === 'teach') return;
 
   const bug = bugAt(app.state, hit.x, hit.y);
   if (bug) {
@@ -266,6 +325,10 @@ function onPointerDown(e) {
 
   const cell = cellAt(app.state, hit.x, hit.y);
   if (!walkable(cell)) return;
+  if (!inSpawn(app.state, hit.x, hit.y)) {
+    flashBanner('bugs come out of the nest — drop it in the clearing');
+    return;
+  }
   const placed = placeBug(app.state, hit.x, hit.y, app.selected);
   if (!placed) { flashBanner(`no ${app.selected}s left`); return; }
   app.audio.place(beatNow());
@@ -280,9 +343,10 @@ function onPointerMove(e) {
 }
 
 const VERB_KEYS = {
-  w: 'step', arrowup: 'step',
-  a: 'left', arrowleft: 'left',
-  d: 'right', arrowright: 'right',
+  w: 'north', arrowup: 'north',
+  a: 'west', arrowleft: 'west',
+  s: 'south', arrowdown: 'south',
+  d: 'east', arrowright: 'east',
   ' ': 'act',
 };
 
@@ -355,50 +419,85 @@ function litVerb(v) {
   setTimeout(() => b.classList.remove('lit'), 90);
 }
 
+function buildBars() {
+  const el = document.getElementById('bars');
+  el.innerHTML = '';
+  for (const n of BAR_CHOICES) {
+    const b = document.createElement('button');
+    b.className = 'tool' + (app.teach && app.teach.bars === n ? ' primary' : '');
+    b.textContent = `${n} bar${n > 1 ? 's' : ''}`;
+    b.addEventListener('click', () => { b.blur(); setBars(n); });
+    el.appendChild(b);
+  }
+}
+
 function refreshTeachUI() {
   const t = app.teach;
   if (!t) return;
   const spec = BUGS[t.bug.type];
   document.getElementById('teachWho').innerHTML =
-    `${spec.label} <small>acts on ${spec.note} &middot; ${spec.blurb}</small>`;
-
-  const st = document.getElementById('teachState');
-  if (!t.recording) {
-    st.textContent = `count in ${t.countIn}`;
-    st.className = 'badge rec';
-  } else {
-    st.textContent = `${t.slots.length} / ${MAX_SLOTS}`;
-    st.className = 'badge';
-  }
+    `${spec.label} <small>${spec.note} &middot; ${spec.blurb}</small>`;
 
   const cl = document.getElementById('teachCloses');
-  if (!t.slots.length) {
+  if (!t.recording) {
+    cl.textContent = `count in ${t.countIn}`;
+    cl.className = 'badge rec';
+  } else if (t.slots.every((a) => a === 'rest')) {
     cl.textContent = 'empty';
     cl.className = 'badge';
   } else {
-    cl.textContent = t.preview.closes ? 'CLOSES' : 'DRIFTS';
+    cl.textContent = t.preview.closes ? 'CLOSES' : 'TRAVELS';
     cl.className = `badge ${t.preview.closes ? 'closes' : 'drifts'}`;
   }
 
-  renderPattern(t.slots, t.pending);
+  renderPattern(t.slots, t.head, t.pending);
 }
 
-const VERB_GLYPH = { step: '↑', left: '↺', right: '↻', act: '●', rest: '' };
+const VERB_GLYPH = { north: '↑', south: '↓', west: '←', east: '→', act: '●', rest: '' };
 
-function renderPattern(slots, pending) {
+function renderPattern(slots, head, pending) {
   const el = document.getElementById('pattern');
-  if (!slots) { el.innerHTML = ''; return; }
-  el.innerHTML = '';
-  for (let i = 0; i < MAX_SLOTS; i++) {
-    const span = document.createElement('span');
-    const a = slots[i];
-    if (a) { span.className = a; span.textContent = VERB_GLYPH[a]; }
-    if (i === slots.length) {
-      span.classList.add('now');
-      if (pending) { span.className = `${pending} now`; span.textContent = VERB_GLYPH[pending]; }
+  if (!slots) { el.innerHTML = ''; el.dataset.n = ''; return; }
+
+  if (el.dataset.n !== String(slots.length)) {
+    el.innerHTML = '';
+    for (let i = 0; i < slots.length; i++) {
+      const span = document.createElement('span');
+      span.dataset.i = i;
+      el.appendChild(span);
     }
-    el.appendChild(span);
+    el.dataset.n = String(slots.length);
   }
+
+  const kids = el.children;
+  for (let i = 0; i < slots.length; i++) {
+    const a = slots[i];
+    const cls = [a === 'rest' ? 'rest' : isMove(a) ? 'move' : 'act'];
+    if (i === head) cls.push('now');
+    if (i === head + 1 && pending) cls.push('next');
+    kids[i].className = cls.join(' ');
+    kids[i].textContent = VERB_GLYPH[a] || '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// the beat circle
+
+const beatEl = { ring: null, num: null };
+
+function paintBeat() {
+  if (!beatEl.ring) return;
+  const t = app.teach;
+  const since = app.tickDur - (app.nextTick - beatNow());
+  const k = Math.max(0, Math.min(1, 1 - since / (app.tickDur * 0.85)));
+  const pos = ((app.state.tick % TICKS_PER_BAR) + TICKS_PER_BAR) % TICKS_PER_BAR;
+  const weight = pos === 0 ? 1 : pos % 2 === 0 ? 0.62 : 0.32;
+  const glow = k * weight;
+
+  beatEl.ring.style.transform = `scale(${(1 + 0.42 * glow).toFixed(3)})`;
+  beatEl.ring.style.background = `rgba(224,201,138,${(0.09 + 0.72 * glow).toFixed(3)})`;
+  beatEl.num.textContent = t && !t.recording ? t.countIn : Math.floor(pos / 2) + 1;
+  beatEl.num.style.color = glow > 0.45 ? '#141d0f' : '';
 }
 
 // ---------------------------------------------------------------------------
@@ -423,10 +522,13 @@ function stepTick() {
   if (now - app.nextTick > app.tickDur * 4) app.nextTick = now;
   const tAudio = app.live ? Math.max(app.nextTick, app.audio.now) : 0;
 
+  app.state.tick++;
+  app.audio.pulse(tAudio, app.state.tick % TICKS_PER_BAR === 0);
+
   if (app.mode === 'teach') {
-    teachTick(tAudio);
+    teachTick(tAudio, visNow());
   } else {
-    const due = app.state.tick + 1;
+    const due = app.state.tick;
     app.queued = app.queued.filter((q) => {
       if (q.tick <= due) { q.fn(); return false; }
       return true;
@@ -442,12 +544,26 @@ function stepTick() {
 function frame() {
   const t = visNow();
   const s = app.state;
+  const teach = app.teach;
+
+  s.placing = app.mode === 'play' && s.supply[app.selected] > 0;
 
   for (const bug of s.bugs) {
-    const k = Math.min(1, Math.max(0, (t - bug.moveAt) / GLIDE));
+    let fromX = bug.fromX;
+    let fromY = bug.fromY;
+    let toX = bug.x;
+    let toY = bug.y;
+    let at = bug.moveAt;
+    if (teach && teach.bug === bug) {
+      fromX = teach.fromG.x; fromY = teach.fromG.y;
+      toX = teach.toG.x; toY = teach.toG.y;
+      at = teach.gAt;
+    }
+    const k = Math.min(1, Math.max(0, (t - at) / GLIDE));
     const e = 1 - Math.pow(1 - k, 3);
-    bug.visX = bug.fromX + (bug.x - bug.fromX) * e;
-    bug.visY = bug.fromY + (bug.y - bug.fromY) * e;
+    bug.visX = fromX + (toX - fromX) * e;
+    bug.visY = fromY + (toY - fromY) * e;
+
     const target = (bug.dir * Math.PI) / 2;
     let d = target - bug.visDir;
     while (d > Math.PI) d -= Math.PI * 2;
@@ -456,7 +572,8 @@ function frame() {
   }
 
   s.particles = s.particles.filter((p) => t - p.at < p.life);
-  draw(app.g, s, app.view, t, app.teach);
+  paintBeat();
+  draw(app.g, s, app.view, t, teach);
   requestAnimationFrame(frame);
 }
 
@@ -509,6 +626,8 @@ function newGarden() {
 function boot() {
   app.canvas = document.getElementById('field');
   app.g = app.canvas.getContext('2d');
+  beatEl.ring = document.querySelector('#beat .ring');
+  beatEl.num = document.getElementById('beatNum');
   window.DB = { app, layout }; // prototype poking hatch
 
   document.getElementById('version').textContent = `v${VERSION}`;
@@ -531,6 +650,19 @@ function boot() {
   });
   document.getElementById('teachDone').addEventListener('click', finishTeach);
   document.getElementById('teachCancel').addEventListener('click', cancelTeach);
+  document.getElementById('teachClear').addEventListener('click', (e) => {
+    e.currentTarget.blur();
+    clearRoutine();
+  });
+
+  // click a slot to wipe it back to a rest
+  document.getElementById('pattern').addEventListener('click', (e) => {
+    const i = e.target.dataset && e.target.dataset.i;
+    if (i == null || !app.teach) return;
+    app.teach.slots[Number(i)] = 'rest';
+    recompute(app.teach);
+    refreshTeachUI();
+  });
 
   document.getElementById('reset').addEventListener('click', () => {
     if (app.mode === 'teach') cancelTeach();
@@ -565,7 +697,7 @@ function boot() {
     app.live = true;
     app.nextTick = engine.now + 0.25;
     document.getElementById('title').classList.add('gone');
-    flashBanner('pick a bug, click the garden');
+    flashBanner('drop a bug in the clearing');
   });
 }
 

@@ -38,6 +38,33 @@ html, body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+#hudTop { display: flex; align-items: center; }
+#panels { flex: 1; min-width: 0; }
+
+/* the pulse */
+#beat {
+  position: relative;
+  flex: 0 0 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  margin-left: 12px;
+}
+#beat .ring {
+  position: absolute;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: rgba(224,201,138,0.1);
+  box-shadow: inset 0 0 0 1px rgba(224,201,138,0.3);
+  will-change: transform;
+}
+#beat b {
+  position: relative;
+  font-size: 12.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
 .panel {
   display: flex;
   align-items: center;
@@ -146,22 +173,25 @@ html, body {
 .badge.drifts { color: var(--drift); border-color: #6a5427; background: #2b2313; }
 .badge.rec { color: #ff9d9d; border-color: #6d2f2f; background: #2c1414; }
 
-.verbs { gap: 8px; }
+.bars { gap: 5px; }
+.verbs { gap: 6px; }
 .verb {
   background: #23301c;
   border: 1px solid #3c5130;
   border-radius: 10px;
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: .05em;
-  padding: 8px 14px;
+  padding: 6px 13px;
+  min-width: 46px;
   cursor: pointer;
   line-height: 1.1;
   transition: background .08s, transform .06s;
 }
 .verb i { display: block; font-style: normal; font-size: 9px; font-weight: 400; opacity: .55; letter-spacing: 0; }
+.verb.wide { font-size: 12px; min-width: 62px; }
 .verb:hover { background: #2f4126; }
 .verb.lit { background: #6d9b4b; color: #0d140b; transform: translateY(1px); }
 
@@ -175,21 +205,23 @@ html, body {
 }
 #pattern span {
   flex: 1;
-  height: 15px;
+  min-width: 0;
+  height: 16px;
   border-radius: 3px;
   background: #16200f;
   border: 1px solid #1f2b17;
-  font-size: 8.5px;
+  font-size: 10px;
   color: #0d140b;
   display: grid;
   place-items: center;
   font-weight: 700;
 }
-#pattern span.step { background: #6d9b4b; border-color: #86b862; }
-#pattern span.left, #pattern span.right { background: #4a7d8e; border-color: #63a0b3; }
-#pattern span.act { background: #d8a24a; border-color: #eebc68; }
+#pattern span { cursor: pointer; }
+#pattern span.move { background: #6d9b4b; border-color: #86b862; color: #12200a; }
+#pattern span.act { background: #d8a24a; border-color: #eebc68; color: #241a06; }
 #pattern span.rest { background: #1b2415; border-color: #263019; }
 #pattern span.now { outline: 2px solid var(--warm); outline-offset: 1px; }
+#pattern span.next { outline: 2px dashed rgba(224,201,138,0.55); outline-offset: 1px; }
 
 /* ---- overlays ---- */
 
@@ -305,5 +337,7 @@ kbd {
   .tempo, .ver, .lane .nm span { display: none; }
   .panel { justify-content: center; }
   .group.right { margin-left: 0; }
-  .verb { padding: 7px 10px; font-size: 11px; }
+  .verb { padding: 6px 9px; font-size: 13px; min-width: 38px; }
+  #beat { flex: 0 0 42px; height: 42px; margin-left: 6px; }
+  #beat .ring { width: 28px; height: 28px; }
 }

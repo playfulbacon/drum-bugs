@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.3 — "true north"
+
+Four changes to how a routine is authored, all of them making the composing half
+less of a memory test.
+
+- **The beat is visible.** A circle in the HUD pulses on every eighth, swelling
+  on the downbeat, with the count in the bar inside it. During a count-in it
+  shows the count instead.
+- **Movement is absolute, not relative.** <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+  are north / west / south / east rather than step and turn. A move always turns
+  the bug even when the way is blocked, which makes *walking into things* the way
+  you aim — nose a beetle at a rock, then act. Because facing is now fully
+  determined by the routine, the preview settles it before drawing, so what you
+  see is the steady-state lap rather than a one-off first pass, and CLOSES is
+  purely a question of whether the path comes home.
+- **Bugs come out of the nest.** There is a clearing around the nest, lit while
+  you are holding a bug, and that is the only place one can be dropped. Getting
+  a bug anywhere else is now the routine's job — which is what makes a
+  *travelling* routine useful rather than a mistake, so the badge says TRAVELS
+  instead of DRIFTS.
+- **The recorder loops.** A routine plays round and round while you build it,
+  the bug walking its path in ghost and snapping back to the start each pass, so
+  you can practise before committing. Confirm and cancel are explicit, `clear`
+  wipes the pattern, and tapping a slot in the strip resets it to a rest.
+  Nothing touches the live bug until you confirm.
+
+Also: loop length is now set in bars (1 / 2 / 4) rather than raw slots, and
+defaults to 2 bars for every bug — so a cricket's 16 eighths, an ant's 8 quarters
+and a beetle's 4 halves are all the same phrase. The cricket now kicks the berry
+it is standing on rather than the one in front, since absolute movement means you
+can no longer face a berry without stepping onto it.
+
 ## v0.2 — "the routine"
 
 A full pivot, following the Pikmin + Patapon conversation. The v0.1 toy is gone;
