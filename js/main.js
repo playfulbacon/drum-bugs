@@ -2,7 +2,7 @@ import { VERSION, VERSION_NAME } from './version.js';
 import { AudioEngine } from './audio.js';
 import {
   createState, advance, previewPath, placeBug, removeBug, bugAt, cellAt,
-  walkable, inSpawn, nextBarTick, slotsForBars, actsAt, slotStartsBar,
+  walkable, inSpawn, nextBarTick, slotsForBars, actsAt, slotStartsBar, pathHome,
   BUGS, TYPES, DIR_OF, BAR_CHOICES, TICKS_PER_BAR,
 } from './game.js';
 import { computeLayout, cellFromPoint, cellCenter, draw, layout } from './render.js';
@@ -105,8 +105,20 @@ const fx = {
     const { cx, cy } = cellCenter(bug.x, bug.y);
     ring(cx, cy, layout.u * 0.1, '120,130,110', 0.3);
   },
+  ripen(cell) {
+    const { cx, cy } = cellCenter(cell.x, cell.y);
+    ring(cx, cy, layout.u * 0.14, '232,121,140', 0.6);
+  },
+  doze(bug) {
+    const { cx, cy } = cellCenter(bug.x, bug.y);
+    burst(cx, cy, 4, '120,130,110', 24, 0.7);
+  },
+  wake(bug) {
+    const { cx, cy } = cellCenter(bug.x, bug.y);
+    ring(cx, cy, layout.u * 0.18, '198,222,178', 0.4);
+  },
   win() {
-    flashBanner('every berry home — the garden is quiet again');
+    flashBanner('the nest is full — the garden is quiet again');
   },
 };
 
@@ -125,6 +137,9 @@ function startTeach(bug) {
     prevDir: bug.dir,
     head: -1,
     pending: null,
+    // The ring starts the moment you pick the bug up, so slot 0 is the first
+    // thing you drum — what you teach is what runs.
+    startTick: app.state.tick,
     fromG: { x: bug.x, y: bug.y },
     toG: { x: bug.x, y: bug.y },
     gAt: -10,
@@ -145,11 +160,12 @@ function recompute(t) {
 function teachTick(tAudio, tVis) {
   const t = app.teach;
   const period = t.bug.period;
-  if (mod(app.state.tick, period) !== 0) return;
+  const since = app.state.tick - t.startTick;
+  if (since < 0 || mod(since, period) !== 0) return;
 
-  // The recorder rides the same clock the world does, so slot 0 always falls
-  // on a bar line and the playhead agrees with the pulse.
-  t.head = mod(Math.floor(app.state.tick / period), t.slots.length);
+  // Slot boundaries sit on world ticks, so the playhead moves in lockstep with
+  // the pulse; the ring's origin is where you started.
+  t.head = mod(Math.floor(since / period), t.slots.length);
 
   if (t.pending) {
     t.slots[t.head] = t.pending;
@@ -183,7 +199,7 @@ function pressVerb(v) {
 
   const period = t.bug.period;
   const slotDur = period * app.tickDur;
-  const ticksAhead = period - mod(app.state.tick, period);
+  const ticksAhead = period - mod(app.state.tick - t.startTick, period);
   const toNext = app.nextTick + (ticksAhead - 1) * app.tickDur - beatNow();
   if (toNext <= slotDur / 2) {
     t.pending = v;
@@ -207,6 +223,28 @@ function setBars(n) {
   refreshTeachUI();
 }
 
+// Fill the trailing rests with the shortest walk back to the start.
+function autoClose() {
+  const t = app.teach;
+  let last = -1;
+  t.slots.forEach((a, i) => { if (a !== 'rest') last = i; });
+  if (last < 0) { flashBanner('nothing to close yet'); return; }
+
+  const home = pathHome(app.state, t.bug, t.slots);
+  if (home === null) { flashBanner("can't walk home from there"); return; }
+  if (!home.length) { flashBanner('already closes'); return; }
+
+  const room = t.slots.length - 1 - last;
+  if (home.length > room) {
+    flashBanner(`needs ${home.length} free slots at the end — try a longer loop`);
+    return;
+  }
+  for (let i = 0; i < home.length; i++) t.slots[last + 1 + i] = home[i];
+  recompute(t);
+  refreshTeachUI();
+  flashBanner('closed the loop');
+}
+
 function clearRoutine() {
   const t = app.teach;
   t.slots = new Array(t.slots.length).fill('rest');
@@ -221,7 +259,12 @@ function finishTeach() {
   bug.loop = t.slots.slice();
   bug.bars = t.bars;
   bug.dir = t.preview.startDir;
-  bug.phase = 0;
+  // Start at slot 0 on the next bar line, so the routine that runs is exactly
+  // the one the preview drew.
+  bug.slot = 0;
+  bug.phase = nextBarTick(app.state.tick);
+  bug.idle = 0;
+  bug.dozing = false;
   const closes = t.preview.closes;
   endTeach();
   flashBanner(closes ? 'routine set — it closes' : 'routine set — it travels');
@@ -367,7 +410,7 @@ function flashBanner(text) {
 
 function bumpScore() {
   const s = app.state;
-  document.getElementById('score').textContent = `${s.delivered} / ${s.totalBerries} berries`;
+  document.getElementById('score').textContent = `${s.delivered} / ${s.quota} berries`;
 }
 
 function refreshTray() {
@@ -633,6 +676,10 @@ function boot() {
   document.getElementById('teachClear').addEventListener('click', (e) => {
     e.currentTarget.blur();
     clearRoutine();
+  });
+  document.getElementById('teachClose').addEventListener('click', (e) => {
+    e.currentTarget.blur();
+    autoClose();
   });
 
   // click a slot to wipe it back to a rest

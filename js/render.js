@@ -1,6 +1,6 @@
 // Top-down garden. Muted greens and browns, soft shapes, everything a bit damp.
 
-import { COLS, ROWS, SPAWN_RADIUS } from './game.js';
+import { COLS, ROWS, SPAWN_RADIUS, ripeness } from './game.js';
 
 export const layout = { u: 0, ox: 0, oy: 0, w: 0, h: 0 };
 
@@ -103,7 +103,10 @@ export function draw(g, state, view, time, teach) {
     g.strokeRect(cx - u / 2 + 1, cy - u / 2 + 1, u - 2, u - 2);
   }
 
-  for (const cell of state.cells) if (cell.berry) drawBerry(g, cell.x, cell.y, u, time);
+  for (const cell of state.cells) {
+    if (cell.bush) drawBush(g, state, cell, u, time);
+    else if (cell.berry) drawBerry(g, cell.x, cell.y, u, time);
+  }
 
   if (teach) drawPreview(g, state, teach, u, time);
 
@@ -212,6 +215,34 @@ function drawFeature(g, cell, u) {
   }
 }
 
+// A bush shows what it is about to give you: a bud that swells as it ripens.
+function drawBush(g, state, cell, u, time) {
+  const { cx, cy } = cellCenter(cell.x, cell.y);
+  g.fillStyle = '#243c1c';
+  g.beginPath();
+  g.ellipse(cx, cy + u * 0.08, u * 0.3, u * 0.22, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#31501f';
+  for (let i = 0; i < 5; i++) {
+    const a = hash(cell.x * 41 + cell.y * 13 + i) * Math.PI * 2;
+    const d = hash(cell.x * 7 + cell.y * 29 + i) * u * 0.22;
+    g.beginPath();
+    g.arc(cx + Math.cos(a) * d, cy + u * 0.06 + Math.sin(a) * d * 0.6, u * 0.07, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  if (cell.berry) { drawBerry(g, cell.x, cell.y, u, time); return; }
+
+  const k = ripeness(state, cell);
+  if (k <= 0) return;
+  g.globalAlpha = 0.35 + k * 0.6;
+  g.fillStyle = k > 0.75 ? '#b7466099' : '#6f7a4d';
+  g.beginPath();
+  g.arc(cx, cy - u * 0.04, u * 0.05 + u * 0.1 * k, 0, Math.PI * 2);
+  g.fill();
+  g.globalAlpha = 1;
+}
+
 function drawBerry(g, x, y, u, time) {
   const { cx, cy } = cellCenter(x, y);
   const bob = Math.sin(time * 2 + x * 1.7 + y) * u * 0.02;
@@ -233,7 +264,7 @@ function drawBug(g, bug, u, time, state, teach) {
   const { cx, cy } = cellCenter(bug.visX, bug.visY);
   const col = BUG_COLORS[bug.type];
   const s = u * 0.34;
-  const dimmed = !state.sections[bug.type].active;
+  const dimmed = !state.sections[bug.type].active || bug.dozing;
   const being = teach && teach.bug === bug;
 
   const since = time - bug.actAt;
@@ -252,11 +283,12 @@ function drawBug(g, bug, u, time, state, teach) {
   g.rotate(bug.visDir);
   g.scale(pop, pop);
 
-  const wig = Math.sin(time * 11 + bug.visX) * 0.14;
+  const busy = bug.dozing ? 0 : 1;
+  const wig = Math.sin(time * 11 + bug.visX) * 0.14 * busy;
   g.strokeStyle = col.leg;
   g.lineWidth = Math.max(1.2, u * 0.035);
   for (let i = -1; i <= 1; i++) {
-    const p = Math.sin(time * 11 + i * 1.6) * s * 0.3;
+    const p = Math.sin(time * 11 + i * 1.6) * s * 0.3 * busy;
     g.beginPath();
     g.moveTo(i * s * 0.34, -s * 0.1);
     g.lineTo(i * s * 0.34 + p * 0.4, -s * 0.75);
@@ -315,6 +347,18 @@ function drawBug(g, bug, u, time, state, teach) {
     g.beginPath();
     g.arc(cx - u * 0.04, cy - s * 0.75 - u * 0.04, u * 0.045, 0, Math.PI * 2);
     g.fill();
+  }
+
+  if (bug.dozing && !being) {
+    g.fillStyle = 'rgba(190,200,170,0.5)';
+    for (let i = 0; i < 3; i++) {
+      const t2 = (time * 0.6 + i * 0.33) % 1;
+      g.globalAlpha = (1 - t2) * 0.5;
+      g.beginPath();
+      g.arc(cx + s * 0.7 + t2 * u * 0.2, cy - s * 0.8 - t2 * u * 0.35, u * 0.035, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
   }
 
   if (being) {

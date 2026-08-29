@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.5 — "the harvest"
+
+- **Berry bushes regrow.** A picked bush comes back into fruit four bars later,
+  with a bud that visibly swells as it ripens. The goal is now a quota (15
+  deliveries) rather than clearing a fixed set, so a good fetch circuit is a
+  machine that keeps earning instead of a routine that goes stale after one use.
+- **Stuck travellers go quiet.** A bug that achieves nothing for a whole lap
+  stops making its failure noises, dims, and puffs a few sleep motes. Any
+  success — including the world changing around it — wakes it instantly.
+- **Auto-close.** A `close loop` button fills the trailing rests with the
+  shortest walk back to the start. It understands cricket water crossings (move
+  into the water to turn, then act to jump), and tells you if there isn't room
+  or if there is no way home on foot.
+
+**Two real bugs fixed, both about routines not running as taught:**
+
+- A bug's slot used to be derived from the world clock, so on confirming a
+  routine it joined *mid-loop* and traced a rotated, wrong path — the ant fetch
+  circuit silently never picked anything up. Timing is still clock-locked via
+  `phase`, but the slot is a plain counter now, so a nudge shifts *when* a
+  routine runs without rotating *what* it does.
+- The teaching recorder filled its ring at whatever offset the world clock
+  happened to be on, so the first thing you drummed rarely became slot 0. The
+  ring is now anchored to the moment you pick the bug up, while slot boundaries
+  still sit on world ticks — so the playhead stays locked to the pulse and what
+  you teach is what runs.
+
 ## v0.4 — "one grid"
 
 - **No count-in.** Teaching starts recording immediately, on whatever beat the

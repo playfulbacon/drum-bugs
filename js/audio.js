@@ -204,6 +204,11 @@ export class AudioEngine {
     });
   }
 
+  // a bush coming back into fruit — barely there
+  sprout(t) {
+    this._tone(t, { type: 'sine', f0: 1180, f1: 1560, peak: 0.055, dur: 0.3, wet: 0.5 });
+  }
+
   pulse(t, accent) {
     if (!this.pulseOn) return;
     const c = this.ctx;

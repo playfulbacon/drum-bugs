@@ -44,7 +44,8 @@ all the sections share a phrase length whatever their subdivision.
 
 A badge tells you whether the loop **CLOSES** (comes back to where it started) or
 **TRAVELS**. Travelling isn't a mistake: it's how you get a bug across the garden.
-Re-teach it a closing routine once it arrives.
+Re-teach it a closing routine once it arrives. **close loop** fills the trailing
+rests with the shortest walk home — crickets get water crossings too.
 
 `act` is context-sensitive: deliver if you're carrying and standing on the nest,
 smash the rock you face, jump the water you face, kick the berry underneath you,
@@ -100,6 +101,11 @@ learned separately.
 - **The nest is the downbeat.** Delivering a berry plays the bass drum, so tight
   logistics literally land on the one. You can hear whether your economy is
   running well.
+- **Bushes regrow, so a circuit keeps earning.** A picked bush comes back into
+  fruit a few bars later — the goal is a quota, not a scavenger hunt, so the game
+  is about building throughput rather than solving each berry once.
+- **Nothing knocks against a wall forever.** A routine that achieves nothing for
+  a whole lap goes quiet and dims; any success wakes it instantly.
 
 ## What this prototype is for
 
