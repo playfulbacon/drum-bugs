@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.7 — "on the one"
+
+**Routines are locked to the world's grid.** Previously the teaching recorder
+started its ring wherever you happened to click, so a routine's "one" was its
+own rather than the world's — the pattern strip's downbeat and the pulsing beat
+marker could disagree, and two routines taught at different moments never lined
+up with each other.
+
+Now the recorder's ring *is* the world grid: slot 0 sits on the world's downbeat,
+and the bar markers in the pattern strip mark real bars. On confirming, a bug
+comes in at the top of the next lap **of its own length** — and since every
+routine is a whole number of bars, 1-, 2- and 4-bar loops nest inside one
+another and every lap starts on a shared boundary.
+
+A bug waiting to come in is drawn faded with a ring around it, and the banner
+says how many bars away it is.
+
 ## v0.6 — "the frontier"
 
 The growth loop, and an answer to the tension that one-time actions can't be

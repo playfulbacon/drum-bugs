@@ -274,7 +274,8 @@ function drawBug(g, bug, u, time, state, teach) {
   const { cx, cy } = cellCenter(bug.visX, bug.visY);
   const col = BUG_COLORS[bug.type];
   const s = u * (bug.type === 'termite' ? 0.42 : 0.34);
-  const dimmed = !state.sections[bug.type].active || bug.dozing;
+  const waiting = bug.phase > state.tick;
+  const dimmed = !state.sections[bug.type].active || bug.dozing || waiting;
   const being = teach && teach.bug === bug;
 
   const since = time - bug.actAt;
@@ -293,7 +294,7 @@ function drawBug(g, bug, u, time, state, teach) {
   g.rotate(bug.visDir);
   g.scale(pop, pop);
 
-  const busy = bug.dozing ? 0 : 1;
+  const busy = bug.dozing || waiting ? 0 : 1;
   const wig = Math.sin(time * 11 + bug.visX) * 0.14 * busy;
   g.strokeStyle = col.leg;
   g.lineWidth = Math.max(1.2, u * 0.035);
@@ -359,7 +360,20 @@ function drawBug(g, bug, u, time, state, teach) {
     g.fill();
   }
 
-  if (bug.dozing && !being) {
+  // waiting for the top of its phrase to come in
+  if (waiting && !being) {
+    const k = 0.5 + 0.5 * Math.sin(time * 5);
+    g.strokeStyle = `rgba(224,201,138,${(0.3 + k * 0.45).toFixed(3)})`;
+    g.lineWidth = Math.max(1.5, u * 0.04);
+    g.setLineDash([u * 0.1, u * 0.09]);
+    g.lineDashOffset = -time * 22;
+    g.beginPath();
+    g.arc(cx, cy, u * 0.42, 0, Math.PI * 2);
+    g.stroke();
+    g.setLineDash([]);
+  }
+
+  if (bug.dozing && !waiting && !being) {
     g.fillStyle = 'rgba(190,200,170,0.5)';
     for (let i = 0; i < 3; i++) {
       const t2 = (time * 0.6 + i * 0.33) % 1;

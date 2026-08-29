@@ -2,7 +2,8 @@ import { VERSION, VERSION_NAME } from './version.js';
 import { AudioEngine } from './audio.js';
 import {
   createState, advance, previewPath, spawnBug, removeBug, bugAt, nestAt,
-  canBuildNest, nextBarTick, slotsForBars, actsAt, slotStartsBar, pathHome,
+  canBuildNest, nextBarTick, nextLapTick, loopTicks, slotsForBars, actsAt,
+  slotStartsBar, pathHome,
   BUGS, TYPES, DIR_OF, BAR_CHOICES, NEST_GOAL, TICKS_PER_BAR,
 } from './game.js';
 import { computeLayout, cellFromPoint, cellCenter, draw, layout } from './render.js';
@@ -150,9 +151,6 @@ function startTeach(bug) {
     prevDir: bug.dir,
     head: -1,
     pending: null,
-    // The ring starts the moment you pick the bug up, so slot 0 is the first
-    // thing you drum — what you teach is what runs.
-    startTick: app.state.tick,
     fromG: { x: bug.x, y: bug.y },
     toG: { x: bug.x, y: bug.y },
     gAt: -10,
@@ -173,12 +171,11 @@ function recompute(t) {
 function teachTick(tAudio, tVis) {
   const t = app.teach;
   const period = t.bug.period;
-  const since = app.state.tick - t.startTick;
-  if (since < 0 || mod(since, period) !== 0) return;
+  if (mod(app.state.tick, period) !== 0) return;
 
-  // Slot boundaries sit on world ticks, so the playhead moves in lockstep with
-  // the pulse; the ring's origin is where you started.
-  t.head = mod(Math.floor(since / period), t.slots.length);
+  // The ring is the world's grid, not its own: slot 0 is the world's downbeat,
+  // so a routine's "one" always lands where every other routine's does.
+  t.head = mod(Math.floor(app.state.tick / period), t.slots.length);
 
   if (t.pending) {
     t.slots[t.head] = t.pending;
@@ -212,7 +209,7 @@ function pressVerb(v) {
 
   const period = t.bug.period;
   const slotDur = period * app.tickDur;
-  const ticksAhead = period - mod(app.state.tick - t.startTick, period);
+  const ticksAhead = period - mod(app.state.tick, period);
   const toNext = app.nextTick + (ticksAhead - 1) * app.tickDur - beatNow();
   if (toNext <= slotDur / 2) {
     t.pending = v;
@@ -272,15 +269,20 @@ function finishTeach() {
   bug.loop = t.slots.slice();
   bug.bars = t.bars;
   bug.dir = t.preview.startDir;
-  // Start at slot 0 on the next bar line, so the routine that runs is exactly
-  // the one the preview drew.
+  // Come in at the top of the next lap of this length, starting at slot 0 —
+  // so the routine that runs is exactly the one the preview drew, and it sits
+  // on the same grid as everything else.
   bug.slot = 0;
-  bug.phase = nextBarTick(app.state.tick);
+  bug.phase = nextLapTick(app.state.tick, loopTicks(bug));
   bug.idle = 0;
   bug.dozing = false;
   const closes = t.preview.closes;
+  const bars = Math.ceil((bug.phase - app.state.tick) / TICKS_PER_BAR);
   endTeach();
-  flashBanner(closes ? 'routine set — it closes' : 'routine set — it travels');
+  flashBanner(
+    `${closes ? 'routine set — it closes' : 'routine set — it travels'}`
+    + ` · comes in in ${bars} bar${bars === 1 ? '' : 's'}`,
+  );
 }
 
 function cancelTeach() {

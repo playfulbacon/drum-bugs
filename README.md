@@ -33,8 +33,11 @@ blocked — so **you aim by walking into things**. Nose a beetle into a rock, th
 act.
 
 **The routine loops while you build it.** There is no count-in — recording starts
-the moment you pick a bug up, riding the same clock the world does, so slot 0 of
-every routine falls on a bar line and the playhead always agrees with the pulse.
+the moment you pick a bug up, and the recorder's ring *is* the world's grid:
+slot 1 of a routine is the world's downbeat, so the playhead always agrees with
+the pulse and every routine stays locked to every other. On confirming, the bug
+waits for the top of its next lap and comes in there — faded with a ring around
+it while it waits.
 The recorder goes round and round, the bug walking its path in ghost and snapping
 back to the start each pass, so you can practise and adjust until it's right. Tap a slot in the strip to wipe it back
 to a rest, `clear` to start over. Nothing commits until you **confirm**
@@ -108,10 +111,11 @@ an arrangement is actually built. Three nests wins.
   question of whether the path comes home.
 - **Practice before you commit.** The recorder loops, so authoring a routine is
   a groove you settle into rather than a take you have to nail.
-- **One grid for everything.** A bug's slot is derived from the world clock
-  rather than counted down, so every bug and the recorder share a single grid.
-  Confirming a routine drops the bug straight into the phrase already in
-  progress instead of restarting it.
+- **One grid for everything.** Routines are a whole number of bars, and a lap
+  always starts on a tick that is a multiple of its own length — so 1-, 2- and
+  4-bar loops nest inside each other and a routine's "one" is always the world's
+  "one". The teaching recorder rides the same grid, so what you hear while
+  composing is where it will sit when it runs.
 - **The nest is the downbeat.** Delivering a berry plays the bass drum, so tight
   logistics literally land on the one. You can hear whether your economy is
   running well.

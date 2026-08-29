@@ -204,6 +204,18 @@ export function nextBarTick(tick) {
   return (Math.floor(tick / TICKS_PER_BAR) + 1) * TICKS_PER_BAR;
 }
 
+// How long one lap of a routine takes, in ticks. Always a whole number of bars.
+export function loopTicks(bug) {
+  return bug.loop.length * bug.period;
+}
+
+// The next tick at which a routine of this length starts a fresh lap. Because
+// every routine is a whole number of bars, laps of 1, 2 and 4 bars all nest
+// inside the same world grid — a routine's "one" is always the world's "one".
+export function nextLapTick(tick, ticks) {
+  return (Math.floor(tick / ticks) + 1) * ticks;
+}
+
 // ---------------------------------------------------------------------------
 // One tick of the world. The caller advances state.tick, so the metronome keeps
 // running while a routine is being taught.
