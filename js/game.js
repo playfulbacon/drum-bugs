@@ -8,10 +8,15 @@ export const COLS = 15;
 export const ROWS = 7;
 export const TICKS_PER_BAR = 8;
 export const MAX_SLOTS = 32;
-export const SPAWN_RADIUS = 2;
 export const BAR_CHOICES = [1, 2, 4];
 export const RIPEN_BARS = 4;
-export const QUOTA = 15;
+
+// Berries are the currency. Bugs are bought with them; a new nest is the big
+// purchase that moves the frontier outward.
+export const START_BERRIES = 10;
+export const NEST_COST = 10;
+export const NEST_GOAL = 3;
+export const MIN_NEST_GAP = 4;
 
 // Movement verbs are absolute, not relative. A movement always turns the bug
 // to face that way, and moves it if the ground allows — which is why walking
@@ -23,33 +28,38 @@ export const MOVES = ['north', 'west', 'south', 'east'];
 // N nest    b berry bush (regrows)
 const LEVEL = [
   '.....R.....~...',
-  '...b.R..b..~b..',
+  '...b.R..b..~b.b',
   '..N..R.....~...',
-  '...b.R..b..~b..',
+  '...b.R..b..~b.b',
   '.....R.....~...',
-  '.....R..b..~...',
+  '.....R..b..~..b',
   '.....R.....~...',
 ];
 
 export const BUGS = {
   cricket: {
-    label: 'Cricket', period: 1, note: 'eighths', supply: 3,
-    carries: false, jumps: true, kicks: true, smashes: false,
+    label: 'Cricket', period: 1, note: 'eighths', cost: 3,
+    carries: false, jumps: true, kicks: true, smashes: false, builds: false,
     blurb: 'jumps water · kicks the berry underneath it',
   },
   ant: {
-    label: 'Ant', period: 2, note: 'quarters', supply: 4,
-    carries: true, jumps: false, kicks: false, smashes: false,
-    blurb: 'carries berries home',
+    label: 'Ant', period: 2, note: 'quarters', cost: 2,
+    carries: true, jumps: false, kicks: false, smashes: false, builds: false,
+    blurb: 'carries berries to any nest',
   },
   beetle: {
-    label: 'Beetle', period: 4, note: 'halves', supply: 2,
-    carries: false, jumps: false, kicks: false, smashes: true,
+    label: 'Beetle', period: 4, note: 'halves', cost: 5,
+    carries: false, jumps: false, kicks: false, smashes: true, builds: false,
     blurb: 'smashes the rock it faces',
+  },
+  termite: {
+    label: 'Termite', period: 8, note: 'whole notes', cost: 6,
+    carries: false, jumps: false, kicks: false, smashes: false, builds: true,
+    blurb: `raises a new nest for ${NEST_COST} berries — then it is spent`,
   },
 };
 
-export const TYPES = ['cricket', 'ant', 'beetle'];
+export const TYPES = ['cricket', 'ant', 'beetle', 'termite'];
 
 const DX = [1, 0, -1, 0];
 const DY = [0, 1, 0, -1];
@@ -71,20 +81,18 @@ export function createState() {
     }
   }
 
-  const supply = {};
-  for (const k of TYPES) supply[k] = BUGS[k].supply;
   const sections = {};
   for (const k of TYPES) sections[k] = { active: true };
 
   return {
     cells,
-    nest,
+    nests: [nest],
+    activeNest: 0,
     bugs: [],
-    supply,
     sections,
     tick: 0,
+    berries: START_BERRIES,
     delivered: 0,
-    quota: QUOTA,
     particles: [],
     hover: null,
     won: false,
@@ -104,22 +112,35 @@ export function walkable(cell) {
   return !!cell && (cell.t === 'grass' || cell.t === 'nest');
 }
 
-// Bugs come out of the nest, so they can only be dropped in the clearing
-// around it. Where they go after that is the routine's problem.
-export function inSpawn(state, x, y) {
-  return Math.max(Math.abs(x - state.nest.x), Math.abs(y - state.nest.y)) <= SPAWN_RADIUS;
-}
-
 export function slotsForBars(bars, period) {
   return Math.max(1, Math.round((bars * TICKS_PER_BAR) / period));
 }
 
-export function placeBug(state, x, y, type) {
-  const cell = cellAt(state, x, y);
-  if (!walkable(cell) || bugAt(state, x, y)) return null;
-  if (!inSpawn(state, x, y)) return null;
-  if (state.supply[type] <= 0) return null;
-  state.supply[type]--;
+export function nestAt(state, x, y) {
+  return state.nests.findIndex((n) => n.x === x && n.y === y);
+}
+
+// Bugs are bought, and they crawl out of whichever nest is active. If that
+// square is busy they emerge from the nearest free one.
+export function spawnBug(state, type) {
+  const spec = BUGS[type];
+  if (state.berries < spec.cost) return null;
+  const home = state.nests[state.activeNest] || state.nests[0];
+  if (!home) return null;
+
+  let spot = null;
+  const ring = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  for (const [dx, dy] of ring) {
+    const c = cellAt(state, home.x + dx, home.y + dy);
+    if (walkable(c) && !bugAt(state, c.x, c.y)) { spot = c; break; }
+  }
+  if (!spot) return null;
+
+  state.berries -= spec.cost;
+  return makeBug(state, spot.x, spot.y, type);
+}
+
+function makeBug(state, x, y, type) {
   const period = BUGS[type].period;
   const bug = {
     id: Math.random().toString(36).slice(2, 8),
@@ -144,15 +165,25 @@ export function placeBug(state, x, y, type) {
   return bug;
 }
 
-export function removeBug(state, bug) {
+export function removeBug(state, bug, refund = true) {
   const i = state.bugs.indexOf(bug);
   if (i < 0) return;
   state.bugs.splice(i, 1);
-  state.supply[bug.type]++;
+  if (refund) state.berries += BUGS[bug.type].cost;
   if (bug.carrying) {
     const c = cellAt(state, bug.x, bug.y);
     if (c) c.berry = true;
   }
+}
+
+// A nest needs open ground with elbow room, so expansion is a real step out
+// rather than a second doorway on the same patch.
+export function canBuildNest(state, x, y) {
+  const c = cellAt(state, x, y);
+  if (!c || c.t !== 'grass' || c.bush) return false;
+  return state.nests.every(
+    (n) => Math.max(Math.abs(n.x - x), Math.abs(n.y - y)) >= MIN_NEST_GAP,
+  );
 }
 
 const mod = (n, m) => ((n % m) + m) % m;
@@ -208,7 +239,7 @@ export function advance(state, audio, tAudio, tVis, fx) {
     bug.slot = (bug.slot + 1) % bug.loop.length;
   }
 
-  if (!state.won && state.delivered >= state.quota) {
+  if (!state.won && state.nests.length >= NEST_GOAL) {
     state.won = true;
     audio.chime(tAudio + 0.1);
     fx.win();
@@ -284,16 +315,35 @@ function resolveAct(state, bug, audio, tAudio, tVis, fx, accented) {
   const fy1 = bug.y + DY[bug.dir];
   const front = cellAt(state, fx1, fy1);
 
-  // 1. deliver
+  // 1. deliver — any nest will take it
   if (bug.carrying && here && here.t === 'nest') {
     bug.carrying = false;
     state.delivered++;
+    state.berries++;
     audio.boom(tAudio, i);
     fx.deliver(bug);
     return true;
   }
 
-  // 2. smash the rock it faces (accented takes the one behind it too)
+  // 2. raise a new nest. One time only — the termite is spent doing it.
+  // Standing somewhere unbuildable just whiffs, like any other misplaced act.
+  if (spec.builds && canBuildNest(state, bug.x, bug.y)) {
+    if (state.berries < NEST_COST) {
+      fx.tooPoor(bug);
+      audio.whiff(tAudio);
+      return false;
+    }
+    state.berries -= NEST_COST;
+    here.t = 'nest';
+    state.nests.push({ x: bug.x, y: bug.y });
+    state.activeNest = state.nests.length - 1;
+    audio.raise(tAudio);
+    removeBug(state, bug, false);
+    fx.build(here);
+    return true;
+  }
+
+  // 3. smash the rock it faces (accented takes the one behind it too)
   if (spec.smashes && front && front.t === 'rock') {
     front.t = 'grass';
     if (accented) {
@@ -305,7 +355,7 @@ function resolveAct(state, bug, audio, tAudio, tVis, fx, accented) {
     return true;
   }
 
-  // 3. jump the water it faces
+  // 4. jump the water it faces
   if (spec.jumps && front && front.t === 'water') {
     const land = cellAt(state, bug.x + DX[bug.dir] * 2, bug.y + DY[bug.dir] * 2);
     if (walkable(land) && !bugAt(state, land.x, land.y)) {
@@ -316,7 +366,7 @@ function resolveAct(state, bug, audio, tAudio, tVis, fx, accented) {
     }
   }
 
-  // 4. kick the berry underneath, two cells the way it faces (three when
+  // 5. kick the berry underneath, two cells the way it faces (three when
   //    accented). It is airborne, so only where it lands matters.
   if (spec.kicks && here && here.berry) {
     const dist = accented ? 3 : 2;
@@ -331,7 +381,7 @@ function resolveAct(state, bug, audio, tAudio, tVis, fx, accented) {
     }
   }
 
-  // 5. pick up what it stands on
+  // 6. pick up what it stands on
   if (spec.carries && !bug.carrying && here && here.berry) {
     takeBerry(state, here);
     bug.carrying = true;

@@ -1,6 +1,6 @@
 // Top-down garden. Muted greens and browns, soft shapes, everything a bit damp.
 
-import { COLS, ROWS, SPAWN_RADIUS, ripeness } from './game.js';
+import { COLS, ROWS, ripeness, canBuildNest } from './game.js';
 
 export const layout = { u: 0, ox: 0, oy: 0, w: 0, h: 0 };
 
@@ -23,6 +23,7 @@ const BUG_COLORS = {
   cricket: { body: '#8fbc5a', dark: '#5b7d35', leg: '#4c6a2c' },
   ant:     { body: '#a85f3a', dark: '#6f3a20', leg: '#5d3019' },
   beetle:  { body: '#3b4658', dark: '#222b39', leg: '#1a2129' },
+  termite: { body: '#d9cdb0', dark: '#a2926f', leg: '#8b7c5c' },
 };
 
 function hash(i) {
@@ -92,8 +93,8 @@ export function draw(g, state, view, time, teach) {
   const u = layout.u;
   for (const cell of state.cells) drawGround(g, cell, u, time);
   if (mottle) g.drawImage(mottle, layout.ox, layout.oy, layout.w, layout.h);
-  drawSpawn(g, state, u, time, !!state.placing);
   for (const cell of state.cells) drawFeature(g, cell, u);
+  drawNests(g, state, u, time);
 
   // hovered cell
   if (state.hover && !teach) {
@@ -108,6 +109,21 @@ export function draw(g, state, view, time, teach) {
     else if (cell.berry) drawBerry(g, cell.x, cell.y, u, time);
   }
 
+  if (teach && teach.bug.type === 'termite') {
+    const end = teach.preview.path[teach.preview.path.length - 1];
+    const ok = canBuildNest(state, end.x, end.y);
+    const { cx, cy } = cellCenter(end.x, end.y);
+    g.save();
+    g.strokeStyle = ok ? 'rgba(240,222,168,0.75)' : 'rgba(210,120,110,0.6)';
+    g.lineWidth = Math.max(2, u * 0.05);
+    g.setLineDash([u * 0.14, u * 0.11]);
+    g.lineDashOffset = -time * 20;
+    g.beginPath();
+    g.arc(cx, cy, u * 0.46, 0, Math.PI * 2);
+    g.stroke();
+    g.restore();
+  }
+
   if (teach) drawPreview(g, state, teach, u, time);
 
   for (const p of state.particles) drawParticle(g, p, time);
@@ -116,30 +132,24 @@ export function draw(g, state, view, time, teach) {
 
 // ---------------------------------------------------------------------------
 
-// The clearing bugs are dropped into. Lit up while you are holding one.
-function drawSpawn(g, state, u, time, lit) {
-  const x0 = Math.max(0, state.nest.x - SPAWN_RADIUS);
-  const y0 = Math.max(0, state.nest.y - SPAWN_RADIUS);
-  const x1 = Math.min(COLS - 1, state.nest.x + SPAWN_RADIUS);
-  const y1 = Math.min(ROWS - 1, state.nest.y + SPAWN_RADIUS);
-  const a = cellCenter(x0, y0);
-  const b = cellCenter(x1, y1);
-  const rx = a.cx - u / 2;
-  const ry = a.cy - u / 2;
-  const rw = b.cx - a.cx + u;
-  const rh = b.cy - a.cy + u;
-
-  const pulse = lit ? 0.5 + 0.5 * Math.sin(time * 4) : 0;
-  g.save();
-  g.fillStyle = `rgba(214,232,166,${(0.035 + pulse * 0.05).toFixed(3)})`;
-  g.fillRect(rx, ry, rw, rh);
-  g.strokeStyle = `rgba(214,232,166,${(0.22 + pulse * 0.4).toFixed(3)})`;
-  g.lineWidth = Math.max(1.5, u * 0.035);
-  g.setLineDash([u * 0.2, u * 0.16]);
-  g.lineDashOffset = -time * 14;
-  g.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
-  g.setLineDash([]);
-  g.restore();
+// Every nest, with the active one — the one bugs crawl out of — lit up.
+function drawNests(g, state, u, time) {
+  state.nests.forEach((n, i) => {
+    const { cx, cy } = cellCenter(n.x, n.y);
+    const active = i === state.activeNest;
+    const k = 0.5 + 0.5 * Math.sin(time * 2.2);
+    g.save();
+    g.strokeStyle = active
+      ? `rgba(240,222,168,${(0.35 + k * 0.4).toFixed(3)})`
+      : 'rgba(200,190,150,0.18)';
+    g.lineWidth = Math.max(1.5, u * (active ? 0.05 : 0.03));
+    g.setLineDash([u * 0.16, u * 0.13]);
+    g.lineDashOffset = -time * (active ? 16 : 6);
+    g.beginPath();
+    g.arc(cx, cy, u * (active ? 0.52 + k * 0.03 : 0.48), 0, Math.PI * 2);
+    g.stroke();
+    g.restore();
+  });
 }
 
 function drawGround(g, cell, u, time) {
@@ -263,7 +273,7 @@ function drawBerry(g, x, y, u, time) {
 function drawBug(g, bug, u, time, state, teach) {
   const { cx, cy } = cellCenter(bug.visX, bug.visY);
   const col = BUG_COLORS[bug.type];
-  const s = u * 0.34;
+  const s = u * (bug.type === 'termite' ? 0.42 : 0.34);
   const dimmed = !state.sections[bug.type].active || bug.dozing;
   const being = teach && teach.bug === bug;
 

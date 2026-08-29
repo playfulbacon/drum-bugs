@@ -96,7 +96,8 @@ html, body {
 .chip i { display: block; font-size: 10px; font-style: normal; opacity: .6; }
 .chip:hover:not(:disabled) { background: #24321e; color: var(--ink); }
 .chip.sel { background: #33482a; border-color: #5d7f45; color: #f0f6e6; }
-.chip:disabled { opacity: .3; cursor: default; }
+.chip.broke { opacity: .38; }
+.chip.broke i { color: #d08b8b; opacity: .9; }
 
 /* mixer */
 
@@ -133,7 +134,8 @@ html, body {
 
 /* right side tools */
 
-.score { font-size: 12px; color: var(--warm); font-variant-numeric: tabular-nums; }
+.score { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.score b { color: var(--warm); font-weight: 700; }
 .tempo { font-size: 10.5px; color: var(--dim); display: flex; align-items: center; gap: 5px; }
 .tempo input { width: 84px; accent-color: #6d9b4b; }
 .tempo b { color: var(--ink); font-size: 10.5px; min-width: 22px; }

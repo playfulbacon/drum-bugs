@@ -1,9 +1,9 @@
 import { VERSION, VERSION_NAME } from './version.js';
 import { AudioEngine } from './audio.js';
 import {
-  createState, advance, previewPath, placeBug, removeBug, bugAt, cellAt,
-  walkable, inSpawn, nextBarTick, slotsForBars, actsAt, slotStartsBar, pathHome,
-  BUGS, TYPES, DIR_OF, BAR_CHOICES, TICKS_PER_BAR,
+  createState, advance, previewPath, spawnBug, removeBug, bugAt, nestAt,
+  canBuildNest, nextBarTick, slotsForBars, actsAt, slotStartsBar, pathHome,
+  BUGS, TYPES, DIR_OF, BAR_CHOICES, NEST_GOAL, TICKS_PER_BAR,
 } from './game.js';
 import { computeLayout, cellFromPoint, cellCenter, draw, layout } from './render.js';
 
@@ -117,8 +117,21 @@ const fx = {
     const { cx, cy } = cellCenter(bug.x, bug.y);
     ring(cx, cy, layout.u * 0.18, '198,222,178', 0.4);
   },
+  build(cell) {
+    const { cx, cy } = cellCenter(cell.x, cell.y);
+    ring(cx, cy, layout.u * 0.5, '224,201,138', 1.4);
+    ring(cx, cy, layout.u * 0.3, '255,236,182', 1.0);
+    burst(cx, cy, 34, '224,201,138', 190, 1.2);
+    refreshTray();
+    refreshMixer();
+    flashBanner('a new nest — bugs come out here now');
+  },
+  tooPoor(bug) {
+    const { cx, cy } = cellCenter(bug.x, bug.y);
+    ring(cx, cy, layout.u * 0.16, '200,120,120', 0.4);
+  },
   win() {
-    flashBanner('the nest is full — the garden is quiet again');
+    flashBanner('three nests — the garden is yours');
   },
 };
 
@@ -349,18 +362,30 @@ function onPointerDown(e) {
     return;
   }
 
-  const cell = cellAt(app.state, hit.x, hit.y);
-  if (!walkable(cell)) return;
-  if (!inSpawn(app.state, hit.x, hit.y)) {
-    flashBanner('bugs come out of the nest — drop it in the clearing');
+  const n = nestAt(app.state, hit.x, hit.y);
+  if (n >= 0 && n !== app.state.activeNest) {
+    app.state.activeNest = n;
+    app.audio.place(beatNow());
+    flashBanner('bugs come out of this nest now');
+  }
+}
+
+// Buying a bug puts it on the active nest and drops you straight into teaching.
+function buy(type) {
+  if (app.mode === 'teach') return;
+  const spec = BUGS[type];
+  app.selected = type;
+  refreshTray();
+  if (app.state.berries < spec.cost) {
+    flashBanner(`${spec.label} costs ${spec.cost} berries`);
     return;
   }
-  const placed = placeBug(app.state, hit.x, hit.y, app.selected);
-  if (!placed) { flashBanner(`no ${app.selected}s left`); return; }
+  const bug = spawnBug(app.state, type);
+  if (!bug) { flashBanner('no room at the nest'); return; }
   app.audio.place(beatNow());
   refreshTray();
   refreshMixer();
-  startTeach(placed);
+  startTeach(bug);
 }
 
 function onPointerMove(e) {
@@ -387,11 +412,11 @@ function onKeyDown(e) {
     return;
   }
 
-  const cue = { 1: 0, 2: 1, 3: 2 }[k];
+  const cue = { 1: 0, 2: 1, 3: 2, 4: 3 }[k];
   if (cue != null) { toggleSection(TYPES[cue]); return; }
-  const nudge = { q: 0, w: 1, e: 2 }[k];
+  const nudge = { q: 0, w: 1, e: 2, r: 3 }[k];
   if (nudge != null && !e.repeat) { nudgeSection(TYPES[nudge]); return; }
-  const acc = { a: 0, s: 1, d: 2 }[k];
+  const acc = { a: 0, s: 1, d: 2, f: 3 }[k];
   if (acc != null && !e.repeat) { accentSection(TYPES[acc]); e.preventDefault(); }
 }
 
@@ -410,16 +435,17 @@ function flashBanner(text) {
 
 function bumpScore() {
   const s = app.state;
-  document.getElementById('score').textContent = `${s.delivered} / ${s.quota} berries`;
+  document.getElementById('score').innerHTML =
+    `<b>${s.berries}</b> berries &middot; nests <b>${s.nests.length}</b>/${NEST_GOAL}`;
 }
 
 function refreshTray() {
   document.querySelectorAll('.chip').forEach((c) => {
     const t = c.dataset.bug;
     c.classList.toggle('sel', t === app.selected);
-    c.disabled = app.state.supply[t] <= 0;
-    c.querySelector('.n').textContent = app.state.supply[t];
+    c.classList.toggle('broke', app.state.berries < BUGS[t].cost);
   });
+  bumpScore();
 }
 
 function refreshMixer() {
@@ -569,8 +595,6 @@ function frame() {
   const s = app.state;
   const teach = app.teach;
 
-  s.placing = app.mode === 'play' && s.supply[app.selected] > 0;
-
   for (const bug of s.bugs) {
     let fromX = bug.fromX;
     let fromY = bug.fromY;
@@ -611,8 +635,8 @@ function buildTray() {
     const b = document.createElement('button');
     b.className = 'chip';
     b.dataset.bug = t;
-    b.innerHTML = `<b>${spec.label} <span class="n"></span></b><i>${spec.note}</i>`;
-    b.addEventListener('click', () => { app.selected = t; refreshTray(); });
+    b.innerHTML = `<b>${spec.label}</b><i>${spec.note} &middot; ${spec.cost}&#9679;</i>`;
+    b.addEventListener('click', () => { b.blur(); buy(t); });
     tray.appendChild(b);
   }
 }

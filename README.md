@@ -14,9 +14,10 @@ No build step, no dependencies. Static files, ES modules, Web Audio, one canvas.
 
 Best on a desktop with a keyboard.
 
-**Compose (about 70% of it).** Bugs come out of the nest, so you can only drop
-one in the lit clearing around it. Placing drops you straight into teaching. A
-metronome ticks at *that bug's* subdivision and you drum the routine:
+**Compose (about 70% of it).** Berries are the currency. Click a bug in the tray
+and it is bought and crawls out of the lit nest, straight into teaching. Click
+another nest to make it the one they come from. A metronome ticks at *that bug's*
+subdivision and you drum the routine:
 
 | key | verb |
 |---|---|
@@ -56,28 +57,41 @@ showing you what happens there.
 
 | key | verb |
 |---|---|
-| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> | cue a section in / cut it out |
-| <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> | nudge a section one beat late |
-| <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | accent a section's next action |
+| <kbd>1</kbd>–<kbd>4</kbd> | cue a section in / cut it out |
+| <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | nudge a section one beat late |
+| <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> | accent a section's next action |
 
 Cue and cut are quantised: hit the beat and it lands *now*, miss it and it waits
 for the bar line. Precision buys immediacy — there is no way to fail. The pulsing
 circle at the left of the HUD is the beat, swelling on the downbeat, with the
 count in the bar inside it.
 
-Click a bug to re-teach it, shift-click to pick it up.
+Click a bug to re-teach it, shift-click to send it home for a full refund.
 
 ## The bugs
 
-| Bug | Acts on | Sound | Special |
-|---|---|---|---|
-| **Cricket** | eighths | high dry ticks | jumps water, kicks the berry underneath it two cells |
-| **Ant** | quarters | mid woody knock | carries berries |
-| **Beetle** | halves | low bass thud | smashes rock |
+| Bug | Acts on | Cost | Sound | Special |
+|---|---|---|---|---|
+| **Cricket** | eighths | 3 | high dry ticks | jumps water, kicks the berry underneath it two cells |
+| **Ant** | quarters | 2 | mid woody knock | carries berries to any nest |
+| **Beetle** | halves | 5 | low bass thud | smashes the rock it faces |
+| **Termite** | whole notes | 6 | deep resonant boom | raises a new nest for 10 berries — then it is spent |
 
 Their subdivision, their instrument, and their job are the same fact — so the
 sections of the orchestra and the unit groups of the RTS never need to be
 learned separately.
+
+**Loopers and pioneers.** Ants and crickets are permanent parts: their routine is
+a groove and you want it running forever. A termite is a *purchase* — its routine
+is a fill, it lands once, and it is spent. Not everything in a piece loops.
+
+## The loop
+
+Collect berries → buy bugs → break the wall → raise a nest past it → teach new
+circuits from there → repeat. Each ring outward is a new layer in the arrangement,
+and because a distant bush needs a longer routine to reach, **expanding outward
+means layering longer, slower phrases under shorter, faster ones** — which is how
+an arrangement is actually built. Three nests wins.
 
 ## Design notes
 
@@ -102,8 +116,11 @@ learned separately.
   logistics literally land on the one. You can hear whether your economy is
   running well.
 - **Bushes regrow, so a circuit keeps earning.** A picked bush comes back into
-  fruit a few bars later — the goal is a quota, not a scavenger hunt, so the game
-  is about building throughput rather than solving each berry once.
+  fruit a few bars later, so the game is about building throughput rather than
+  solving each berry once.
+- **One-time actions are purchases, not broken loops.** Rigid routines are good
+  at repetition; expansion is inherently one-shot. So the loop lives one level
+  up — in the economy, not inside any single bug.
 - **Nothing knocks against a wall forever.** A routine that achieves nothing for
   a whole lap goes quiet and dims; any success wakes it instantly.
 

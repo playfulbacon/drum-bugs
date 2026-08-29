@@ -147,9 +147,17 @@ export class AudioEngine {
     this._noiseHit(t, { peak: 0.2 * i, f0: 900, f1: 320, q: 1, dur: 0.05, type: 'lowpass', wet: 0.14 });
   }
 
+  // Once a bar, so it wants weight and a long tail — the deepest layer.
+  footTermite(t, i = 1) {
+    this._tone(t, { f0: 70, f1: 33, peak: 0.62 * i, dur: 0.5, wet: 0.3 });
+    this._tone(t, { type: 'triangle', f0: 148, f1: 96, peak: 0.2 * i, dur: 0.3, wet: 0.3 });
+    this._noiseHit(t, { peak: 0.24 * i, f0: 640, f1: 180, q: 0.9, dur: 0.09, type: 'lowpass', wet: 0.24 });
+  }
+
   foot(type, t, i = 1) {
     if (type === 'cricket') this.footCricket(t, i);
     else if (type === 'beetle') this.footBeetle(t, i);
+    else if (type === 'termite') this.footTermite(t, i);
     else this.footAnt(t, i);
   }
 
@@ -200,6 +208,17 @@ export class AudioEngine {
     [0, 4, 7, 12].forEach((semi, k) => {
       this._tone(t + k * 0.09, {
         f0: 523.25 * Math.pow(2, semi / 12), peak: 0.2, dur: 0.9, wet: 0.5,
+      });
+    });
+  }
+
+  // a new nest rising
+  raise(t) {
+    this._tone(t, { f0: 55, f1: 110, peak: 0.7, dur: 1.1, wet: 0.35 });
+    this._noiseHit(t, { peak: 0.34, f0: 300, f1: 1400, q: 0.7, dur: 0.9, wet: 0.5 });
+    [0, 7, 12, 19].forEach((semi, k) => {
+      this._tone(t + 0.16 + k * 0.11, {
+        f0: 261.63 * Math.pow(2, semi / 12), peak: 0.24, dur: 1.2, wet: 0.55,
       });
     });
   }

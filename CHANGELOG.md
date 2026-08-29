@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.6 — "the frontier"
+
+The growth loop, and an answer to the tension that one-time actions can't be
+routines: **they aren't broken loops, they're purchases.** Rigid routines are
+good at repetition, so the loop lives one level up — in the economy.
+
+- **Berries buy bugs.** Deliveries bank a berry; each bug type has a price
+  (ant 2, cricket 3, beetle 5, termite 6). The tray is a shop, not a stock.
+- **No more placement.** Clicking a bug in the tray buys it, puts it on the
+  active nest and drops you straight into teaching. Clicking a nest makes it the
+  one bugs come out of. The spawn clearing is gone.
+- **Termites raise nests.** A new fourth bug on whole notes — one action per bar,
+  the deepest layer in the mix. Its `act` raises a nest where it stands for 10
+  berries, and doing so spends it. A nest needs open ground four cells clear of
+  any other, so expansion is a real step outward; the new nest immediately
+  becomes the one bugs come from, and ants deliver to any of them.
+- **The goal is three nests**, not a berry quota. Collect, break the wall, plant
+  a nest past it, teach new circuits from there, keep going.
+
+Sections are now four, so conducting runs <kbd>1</kbd>–<kbd>4</kbd>,
+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> and
+<kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd>. A termite standing somewhere
+unbuildable whiffs like any other misplaced act rather than failing silently, and
+while teaching one the target square is ringed in gold or red.
+
 ## v0.5 — "the harvest"
 
 - **Berry bushes regrow.** A picked bush comes back into fruit four bars later,
