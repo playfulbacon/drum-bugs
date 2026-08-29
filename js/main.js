@@ -2,7 +2,7 @@ import { VERSION, VERSION_NAME } from './version.js';
 import { AudioEngine } from './audio.js';
 import {
   createState, advance, previewPath, placeBug, removeBug, bugAt, cellAt,
-  walkable, inSpawn, nextBarTick, alignTo, slotsForBars,
+  walkable, inSpawn, nextBarTick, slotsForBars, actsAt, slotStartsBar,
   BUGS, TYPES, DIR_OF, BAR_CHOICES, TICKS_PER_BAR,
 } from './game.js';
 import { computeLayout, cellFromPoint, cellCenter, draw, layout } from './render.js';
@@ -36,6 +36,7 @@ const visNow = () => performance.now() / 1000;
 const beatNow = () => (app.live ? app.audio.now : visNow());
 const setBpm = (bpm) => { app.bpm = bpm; app.tickDur = 60 / bpm / 2; };
 const isMove = (a) => DIR_OF[a] != null;
+const mod = (n, m) => ((n % m) + m) % m;
 
 // ---------------------------------------------------------------------------
 // effects
@@ -124,9 +125,6 @@ function startTeach(bug) {
     prevDir: bug.dir,
     head: -1,
     pending: null,
-    countIn: Math.max(2, slotsForBars(1, bug.period)),
-    recording: false,
-    ticksToSlot: bug.period,
     fromG: { x: bug.x, y: bug.y },
     toG: { x: bug.x, y: bug.y },
     gAt: -10,
@@ -146,20 +144,12 @@ function recompute(t) {
 
 function teachTick(tAudio, tVis) {
   const t = app.teach;
-  t.ticksToSlot--;
-  if (t.ticksToSlot > 0) return;
-  t.ticksToSlot = t.bug.period;
+  const period = t.bug.period;
+  if (mod(app.state.tick, period) !== 0) return;
 
-  if (t.countIn > 0) {
-    t.countIn--;
-    app.audio.countIn(tAudio, t.countIn === 0);
-    if (t.countIn === 0) { t.recording = true; t.head = -1; }
-    refreshTeachUI();
-    return;
-  }
-
-  const wrapped = t.head + 1 >= t.slots.length;
-  t.head = wrapped ? 0 : t.head + 1;
+  // The recorder rides the same clock the world does, so slot 0 always falls
+  // on a bar line and the playhead agrees with the pulse.
+  t.head = mod(Math.floor(app.state.tick / period), t.slots.length);
 
   if (t.pending) {
     t.slots[t.head] = t.pending;
@@ -167,9 +157,9 @@ function teachTick(tAudio, tVis) {
     recompute(t);
   }
 
-  // ghost walks the previewed path; on the wrap it snaps back to the start,
-  // which is what makes a drifting routine obvious
-  const from = wrapped ? t.preview.path[0] : (t.preview.path[t.head] || t.preview.path[0]);
+  // ghost walks the previewed path; at slot 0 it snaps back to the start,
+  // which is what makes a travelling routine obvious
+  const from = t.preview.path[t.head] || t.preview.path[0];
   const to = t.preview.path[t.head + 1] || t.preview.path[0];
   t.fromG = { x: from.x, y: from.y };
   t.toG = { x: to.x, y: to.y };
@@ -190,10 +180,11 @@ function pressVerb(v) {
   litVerb(v);
   if (v === 'act') app.audio.pluck(beatNow(), 0.6);
   else app.audio.foot(t.bug.type, beatNow(), 0.8);
-  if (!t.recording) return;
 
-  const slotDur = t.bug.period * app.tickDur;
-  const toNext = app.nextTick + (t.ticksToSlot - 1) * app.tickDur - beatNow();
+  const period = t.bug.period;
+  const slotDur = period * app.tickDur;
+  const ticksAhead = period - mod(app.state.tick, period);
+  const toNext = app.nextTick + (ticksAhead - 1) * app.tickDur - beatNow();
   if (toNext <= slotDur / 2) {
     t.pending = v;
   } else if (t.head >= 0) {
@@ -210,7 +201,6 @@ function setBars(n) {
   t.slots = new Array(len).fill('rest');
   for (let i = 0; i < Math.min(len, old.length); i++) t.slots[i] = old[i];
   t.bars = n;
-  t.head = -1;
   t.pending = null;
   recompute(t);
   buildBars();
@@ -231,8 +221,7 @@ function finishTeach() {
   bug.loop = t.slots.slice();
   bug.bars = t.bars;
   bug.dir = t.preview.startDir;
-  bug.slot = 0;
-  alignTo(bug, app.state.tick, nextBarTick(app.state.tick));
+  bug.phase = 0;
   const closes = t.preview.closes;
   endTeach();
   flashBanner(closes ? 'routine set — it closes' : 'routine set — it travels');
@@ -281,18 +270,12 @@ function toggleSection(type) {
   const sec = app.state.sections[type];
   conduct(() => {
     sec.active = !sec.active;
-    if (sec.active) {
-      const target = nextBarTick(app.state.tick);
-      for (const b of app.state.bugs) {
-        if (b.type === type) { b.slot = 0; alignTo(b, app.state.tick, target); }
-      }
-    }
     refreshMixer();
   }, sec.active ? `cut ${type}s` : `cue ${type}s`);
 }
 
 function nudgeSection(type) {
-  for (const b of app.state.bugs) if (b.type === type) b.ticksToNext++;
+  for (const b of app.state.bugs) if (b.type === type) b.phase++;
   flashBanner(`${type}s — a beat late`);
   pingLane(type);
 }
@@ -439,10 +422,7 @@ function refreshTeachUI() {
     `${spec.label} <small>${spec.note} &middot; ${spec.blurb}</small>`;
 
   const cl = document.getElementById('teachCloses');
-  if (!t.recording) {
-    cl.textContent = `count in ${t.countIn}`;
-    cl.className = 'badge rec';
-  } else if (t.slots.every((a) => a === 'rest')) {
+  if (t.slots.every((a) => a === 'rest')) {
     cl.textContent = 'empty';
     cl.className = 'badge';
   } else {
@@ -473,6 +453,7 @@ function renderPattern(slots, head, pending) {
   for (let i = 0; i < slots.length; i++) {
     const a = slots[i];
     const cls = [a === 'rest' ? 'rest' : isMove(a) ? 'move' : 'act'];
+    if (app.teach && slotStartsBar(i, app.teach.bug.period)) cls.push('bar');
     if (i === head) cls.push('now');
     if (i === head + 1 && pending) cls.push('next');
     kids[i].className = cls.join(' ');
@@ -487,7 +468,6 @@ const beatEl = { ring: null, num: null };
 
 function paintBeat() {
   if (!beatEl.ring) return;
-  const t = app.teach;
   const since = app.tickDur - (app.nextTick - beatNow());
   const k = Math.max(0, Math.min(1, 1 - since / (app.tickDur * 0.85)));
   const pos = ((app.state.tick % TICKS_PER_BAR) + TICKS_PER_BAR) % TICKS_PER_BAR;
@@ -496,7 +476,7 @@ function paintBeat() {
 
   beatEl.ring.style.transform = `scale(${(1 + 0.42 * glow).toFixed(3)})`;
   beatEl.ring.style.background = `rgba(224,201,138,${(0.09 + 0.72 * glow).toFixed(3)})`;
-  beatEl.num.textContent = t && !t.recording ? t.countIn : Math.floor(pos / 2) + 1;
+  beatEl.num.textContent = Math.floor(pos / 2) + 1;
   beatEl.num.style.color = glow > 0.45 ? '#141d0f' : '';
 }
 
@@ -535,7 +515,7 @@ function stepTick() {
     });
     advance(app.state, app.audio, tAudio, visNow(), fx);
     for (const b of app.state.bugs) {
-      if (b.ticksToNext === b.period && app.state.sections[b.type].active) pingLane(b.type);
+      if (actsAt(b, app.state.tick) && app.state.sections[b.type].active) pingLane(b.type);
     }
   }
   app.nextTick += app.tickDur;

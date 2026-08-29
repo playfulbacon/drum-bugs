@@ -217,16 +217,4 @@ export class AudioEngine {
     o.stop(t + 0.1);
   }
 
-  // Count-in before recording a routine.
-  countIn(t, last) {
-    const c = this.ctx;
-    const o = c.createOscillator();
-    o.type = 'square';
-    o.frequency.value = last ? 1320 : 880;
-    const g = this._env(t, 0.07, 0.002, 0.05);
-    o.connect(g);
-    g.connect(this.out);
-    o.start(t);
-    o.stop(t + 0.15);
-  }
 }

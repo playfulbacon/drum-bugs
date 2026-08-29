@@ -31,9 +31,11 @@ Directions are absolute, and a move always turns the bug even when the way is
 blocked — so **you aim by walking into things**. Nose a beetle into a rock, then
 act.
 
-**The routine loops while you build it.** The recorder goes round and round, the
-bug walking its path in ghost and snapping back to the start each pass, so you
-can practise and adjust until it's right. Tap a slot in the strip to wipe it back
+**The routine loops while you build it.** There is no count-in — recording starts
+the moment you pick a bug up, riding the same clock the world does, so slot 0 of
+every routine falls on a bar line and the playhead always agrees with the pulse.
+The recorder goes round and round, the bug walking its path in ghost and snapping
+back to the start each pass, so you can practise and adjust until it's right. Tap a slot in the strip to wipe it back
 to a rest, `clear` to start over. Nothing commits until you **confirm**
 (<kbd>Enter</kbd>); <kbd>Esc</kbd> cancels and puts the old routine back.
 
@@ -91,6 +93,10 @@ learned separately.
   question of whether the path comes home.
 - **Practice before you commit.** The recorder loops, so authoring a routine is
   a groove you settle into rather than a take you have to nail.
+- **One grid for everything.** A bug's slot is derived from the world clock
+  rather than counted down, so every bug and the recorder share a single grid.
+  Confirming a routine drops the bug straight into the phrase already in
+  progress instead of restarting it.
 - **The nest is the downbeat.** Delivering a berry plays the bass drum, so tight
   logistics literally land on the one. You can hear whether your economy is
   running well.

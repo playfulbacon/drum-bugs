@@ -126,8 +126,7 @@ export function placeBug(state, x, y, type) {
     period,
     bars: 2,
     loop: new Array(slotsForBars(2, period)).fill('rest'),
-    slot: 0,
-    ticksToNext: 1,
+    phase: 0,
     carrying: false,
     accented: false,
     accentPending: false,
@@ -150,8 +149,21 @@ export function removeBug(state, bug) {
   }
 }
 
-export function alignTo(bug, fromTick, targetTick) {
-  bug.ticksToNext = Math.max(1, targetTick - fromTick);
+const mod = (n, m) => ((n % m) + m) % m;
+
+// A bug's slot is derived from the world clock rather than counted down, so
+// every bug — and the teaching recorder — sits on one shared grid. Slot 0 of a
+// routine always lands on a bar line.
+export function actsAt(bug, tick) {
+  return mod(tick - bug.phase, bug.period) === 0;
+}
+
+export function slotAt(bug, tick) {
+  return mod(Math.floor((tick - bug.phase) / bug.period), bug.loop.length);
+}
+
+export function slotStartsBar(i, period) {
+  return (i * period) % TICKS_PER_BAR === 0;
 }
 
 export function nextBarTick(tick) {
@@ -165,10 +177,8 @@ export function nextBarTick(tick) {
 export function advance(state, audio, tAudio, tVis, fx) {
   for (const bug of state.bugs) {
     if (!state.sections[bug.type].active) continue;
-    bug.ticksToNext--;
-    if (bug.ticksToNext > 0) continue;
-    bug.ticksToNext = bug.period;
-    act(state, bug, audio, tAudio, tVis, fx);
+    if (!actsAt(bug, state.tick)) continue;
+    act(state, bug, slotAt(bug, state.tick), audio, tAudio, tVis, fx);
   }
 
   if (!state.won && state.delivered >= state.totalBerries) {
@@ -178,9 +188,8 @@ export function advance(state, audio, tAudio, tVis, fx) {
   }
 }
 
-function act(state, bug, audio, tAudio, tVis, fx) {
-  const action = bug.loop[bug.slot] || 'rest';
-  bug.slot = (bug.slot + 1) % bug.loop.length;
+function act(state, bug, slot, audio, tAudio, tVis, fx) {
+  const action = bug.loop[slot] || 'rest';
 
   // An accent waits on the bug until its next action, so you conduct the
   // section rather than having to hit each bug's own subdivision.

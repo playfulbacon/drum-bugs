@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4 — "one grid"
+
+- **No count-in.** Teaching starts recording immediately, on whatever beat the
+  world is already on.
+- **The recorder rides the world clock.** A bug's slot is now derived from
+  `state.tick` rather than counted down privately, so the teaching playhead, the
+  pulsing beat marker and every running bug all sit on one grid. Slot 0 of a
+  routine always lands on a bar line, and the pattern strip marks where each bar
+  begins.
+- **Confirming keeps the phrase.** A finished routine takes `phase = 0`, so the
+  bug joins the phrase already in progress rather than restarting it — parts stay
+  locked to each other. Cueing a section back in resumes on the grid for the same
+  reason. Nudge is now a phase offset, which is what it always meant.
+
 ## v0.3 — "true north"
 
 Four changes to how a routine is authored, all of them making the composing half
